@@ -1,0 +1,20 @@
+[package]
+name = "rusty_messenger"
+version = "0.1.0"
+edition = "2023"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dotenv = "0.15.0"
+
+[dependencies.rocket]
+version = "=0.5.0-rc.3"
+features = ["json"]
+
+[dependencies.diesel]
+version = "2.1.1"
+features = ["sqlite"]
+
+[dev-dependencies]
+rand = "0.8"
