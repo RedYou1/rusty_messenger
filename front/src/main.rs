@@ -14,10 +14,47 @@ enum Route {
 
 fn page(cx: Scope) -> Element {
     render! {
+        link { rel: "stylesheet", href: "../dist/reset.css" }
+        link { rel: "stylesheet", href: "../dist/style.css" }
+        Router::<Route> {}
+    }
+}
+
+fn SideBar(cx: Scope) -> Element {
+    render! {
         div {
-            link { rel: "stylesheet", href: "../dist/reset.css" }
-            link { rel: "stylesheet", href: "../dist/style.css" }
-            Router::<Route> {}
+            id: "sidebar",
+            div {
+                id: "status",
+                class: "connected"
+            }
+            div {
+                id: "friends",
+                Link {
+                    class: "friend",
+                    to: Route::Conv{ id: String::from("Polo") },
+                    "Polo"
+                }
+            }
+            form {
+                id: "new-friend",
+                onsubmit: move |event| {
+                    let name = event.data.values.get("name").unwrap().first().unwrap();
+                    println!("Submitted! {name:?}")
+                },
+                input {
+                    r#type: "text",
+                    name: "name",
+                    id: "name",
+                    autocomplete: "off",
+                    placeholder: "new friend",
+                    maxlength: "29"
+                }
+                input {
+                    r#type: "submit",
+                    "+"
+                }
+            }
         }
     }
 }
@@ -25,9 +62,12 @@ fn page(cx: Scope) -> Element {
 #[inline_props]
 fn Conv(cx: Scope, id: String) -> Element {
     render! {
-        ul {
-            li {
-                span { id.as_str() }
+        SideBar {}
+        div{
+            id:"content",
+            span { id.as_str() }
+            div{
+                id: "messages",
                 message_element {
                     username: String::from("Polo"),
                     text: String::from("Jack a dit")
@@ -40,13 +80,10 @@ fn Conv(cx: Scope, id: String) -> Element {
 #[inline_props]
 fn Home(cx: Scope) -> Element {
     render! {
-        ul {
-            li {
-                Link {
-                    to: Route::Conv { id: String::from("Polo") },
-                    "Polo"
-                }
-            }
+        SideBar {}
+        div{
+            id:"content",
+            "Home"
         }
     }
 }

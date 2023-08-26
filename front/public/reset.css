@@ -9,7 +9,7 @@ h1,h2,h3,h4,h5,h6{
 ul{
     list-style:none
 }
-button,input,select{
+button,a,input,select{
     margin:0
 }
 html{
@@ -22,7 +22,7 @@ img,video{
     height:auto;
     max-width:100%
 }
-iframe,button,input{
+iframe,button,a,input{
     border:0
 }
 table{
