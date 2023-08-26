@@ -14,7 +14,7 @@ use rocket::serde::json;
 use super::*;
 
 async fn send_message<'c>(client: &'c Client, message: &Message) -> LocalResponse<'c> {
-    client.post(uri!(post))
+    client.post(uri!(message))
         .header(ContentType::Form)
         .body((message as &dyn UriDisplay<Query>).to_string())
         .dispatch()

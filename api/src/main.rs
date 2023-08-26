@@ -44,7 +44,7 @@ async fn events(queue: &State<Sender<Message>>, mut end: Shutdown) -> EventStrea
 
 /// Receive a message from a form submission and broadcast it to any receivers.
 #[post("/message", data = "<form>")]
-fn post(form: Form<Message>, queue: &State<Sender<Message>>) {
+fn message(form: Form<Message>, queue: &State<Sender<Message>>) {
     // A send 'fails' if there are no active subscribers. That's okay.
     let _res = queue.send(form.into_inner());
 }
@@ -53,6 +53,6 @@ fn post(form: Form<Message>, queue: &State<Sender<Message>>) {
 fn rocket() -> _ {
     rocket::build()
         .manage(channel::<Message>(1024).0)
-        .mount("/", routes![post, events])
+        .mount("/", routes![message, events])
         .mount("/", FileServer::from(relative!("static")))
 }
