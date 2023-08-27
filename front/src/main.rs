@@ -1,7 +1,12 @@
 #![allow(non_snake_case)]
 
+const BASE_API_URL: &str = "http://127.0.0.1:8000";
+
+use std::collections::HashMap;
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use tokio::runtime::Runtime;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
@@ -61,6 +66,36 @@ fn SideBar(cx: Scope) -> Element {
 
 #[inline_props]
 fn Conv(cx: Scope, id: String) -> Element {
+    let username = use_state(cx, || String::new());
+    let message = use_state(cx, || String::new());
+
+    let send = move |_| {
+        let mut username: &str = username;
+
+        if message.is_empty() {
+            println!("Empty message");
+            return;
+        }
+        if username.is_empty() {
+            username = "guest";
+        }
+
+        let form = HashMap::from([
+            ("room", id.as_str()),
+            ("username", username),
+            ("message", message),
+        ]);
+
+        let url = format!("{BASE_API_URL}/message");
+        Runtime::new().unwrap().block_on(async {
+            println!("Submitting... {username:?}: {message:?}");
+            let _ = reqwest::Client::new().post(&url).form(&form).send().await;
+            message.set(String::new());
+            println!("Submitted! {username:?}: {message:?}");
+        });
+        return ();
+    };
+
     render! {
         SideBar {}
         div{
@@ -71,6 +106,37 @@ fn Conv(cx: Scope, id: String) -> Element {
                 message_element {
                     username: String::from("Polo"),
                     text: String::from("Jack a dit")
+                }
+            }
+
+            form {
+                id: "new-message",
+                prevent_default: "onsubmit",
+                onsubmit: send,
+                input {
+                    r#type: "text",
+                    name: "username",
+                    id: "username",
+                    autocomplete: "off",
+                    placeholder: "guest",
+                    maxlength: "19",
+                    oninput: move |evt| username.set(evt.value.clone()),
+                    value: "{username}"
+                }
+                input {
+                    r#type: "text",
+                    name: "message",
+                    id: "message",
+                    autocomplete: "off",
+                    placeholder: "Send a message...",
+                    autofocus: true,
+                    oninput: move |evt| message.set(evt.value.clone()),
+                    value: "{message}"
+                }
+                button {
+                    id: "send",
+                    r#type: "submit",
+                    "Send"
                 }
             }
         }
