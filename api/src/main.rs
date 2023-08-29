@@ -1,21 +1,27 @@
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate rocket;
 
-#[cfg(test)] mod tests;
+#[cfg(test)]
+mod tests;
 
-use rocket::{State, Shutdown};
-use rocket::fs::{relative, FileServer};
+use std::collections::HashMap;
+
 use rocket::form::Form;
-use rocket::response::stream::{EventStream, Event};
-use rocket::serde::{Serialize, Deserialize};
-use rocket::tokio::sync::broadcast::{channel, Sender, error::RecvError};
+use rocket::fs::{relative, FileServer};
+use rocket::response::stream::{Event, EventStream};
+use rocket::serde::{Deserialize, Serialize};
 use rocket::tokio::select;
+use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
+use rocket::tokio::sync::RwLock;
+use rocket::{Shutdown, State};
+
+type Convs = RwLock<HashMap<u32, Sender<Message>>>;
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
 #[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
 #[serde(crate = "rocket::serde")]
 struct Message {
-    #[field(validate = len(..30))]
-    pub room: String,
+    pub room: u32,
     #[field(validate = len(..20))]
     pub username: String,
     pub message: String,
@@ -23,9 +29,30 @@ struct Message {
 
 /// Returns an infinite stream of server-sent events. Each event is a message
 /// pulled from a broadcast queue sent by the `post` handler.
-#[get("/events")]
-async fn events(queue: &State<Sender<Message>>, mut end: Shutdown) -> EventStream![] {
-    let mut rx = queue.subscribe();
+#[get("/events/<id>")]
+async fn events(id: u32, convs: &State<Convs>, mut end: Shutdown) -> EventStream![] {
+    let mut rx;
+
+    {
+        let mut trx = None;
+        {
+            let lock = convs.read().await;
+            let conv = lock.get(&id);
+            if conv.is_some() {
+                trx = Some(conv.unwrap().subscribe());
+            }
+        }
+        match trx {
+            Some(t) => rx = t,
+            None => {
+                let t = Some(channel::<Message>(1024).0);
+                let mut lock = convs.write().await;
+                lock.insert(id, t.unwrap());
+                rx = lock.get(&id).unwrap().subscribe();
+            }
+        }
+    }
+
     EventStream! {
         loop {
             let msg = select! {
@@ -44,15 +71,26 @@ async fn events(queue: &State<Sender<Message>>, mut end: Shutdown) -> EventStrea
 
 /// Receive a message from a form submission and broadcast it to any receivers.
 #[post("/message", data = "<form>")]
-fn message(form: Form<Message>, queue: &State<Sender<Message>>) {
-    // A send 'fails' if there are no active subscribers. That's okay.
-    let _res = queue.send(form.into_inner());
+async fn message(form: Form<Message>, convs: &State<Convs>) {
+    let message = form.into_inner();
+    let lock = convs.read().await;
+    let conv = lock.get(&message.room);
+
+    if conv.is_some() {
+        // A send 'fails' if there are no active subscribers. That's okay.
+        let _ = conv.unwrap().send(message);
+    }
 }
+
+mod cors;
 
 #[launch]
 fn rocket() -> _ {
+    let c: Convs = RwLock::new(HashMap::<u32, Sender<Message>>::new());
+
     rocket::build()
-        .manage(channel::<Message>(1024).0)
+        .attach(crate::cors::CORS)
+        .manage(c)
         .mount("/", routes![message, events])
         .mount("/", FileServer::from(relative!("static")))
 }

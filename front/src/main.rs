@@ -14,13 +14,14 @@ enum Route {
     #[route("/")]
     Home {},
     #[route("/:id")]
-    Conv { id: String }
+    Conv { id: u32 }
 }
 
 fn page(cx: Scope) -> Element {
     render! {
         link { rel: "stylesheet", href: "../dist/reset.css" }
         link { rel: "stylesheet", href: "../dist/style.css" }
+        script { src: "../dist/script.js", defer: true }
         Router::<Route> {}
     }
 }
@@ -31,13 +32,13 @@ fn SideBar(cx: Scope) -> Element {
             id: "sidebar",
             div {
                 id: "status",
-                class: "connected"
+                script { src: "../dist/getStatus.js", defer: true }
             }
             div {
                 id: "friends",
                 Link {
-                    class: "friend",
-                    to: Route::Conv{ id: String::from("Polo") },
+                    class: "friend active",
+                    to: Route::Conv{ id: 0 },
                     "Polo"
                 }
             }
@@ -65,7 +66,7 @@ fn SideBar(cx: Scope) -> Element {
 }
 
 #[inline_props]
-fn Conv(cx: Scope, id: String) -> Element {
+fn Conv(cx: Scope, id: u32) -> Element {
     let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
 
@@ -80,11 +81,7 @@ fn Conv(cx: Scope, id: String) -> Element {
             username = "guest";
         }
 
-        let form = HashMap::from([
-            ("room", id.as_str()),
-            ("username", username),
-            ("message", message),
-        ]);
+        let form = HashMap::from([("room", "0"), ("username", username), ("message", message)]);
 
         let url = format!("{BASE_API_URL}/message");
         Runtime::new().unwrap().block_on(async {
@@ -100,7 +97,7 @@ fn Conv(cx: Scope, id: String) -> Element {
         SideBar {}
         div{
             id:"content",
-            span { id.as_str() }
+            span { id.to_string() }
             div{
                 id: "messages",
                 message_element {
@@ -163,17 +160,14 @@ struct Message {
 fn message_element(cx: Scope<Message>) -> Element {
     return render! {
         div{
-            id: "messages",
-            div{
-                class: "message",
-                span{
-                    class: "username",
-                    cx.props.username.as_str()
-                },
-                span{
-                    class: "text",
-                    cx.props.text.as_str()
-                }
+            class: "message",
+            span{
+                class: "username",
+                cx.props.username.as_str()
+            },
+            span{
+                class: "text",
+                cx.props.text.as_str()
             }
         }
     };

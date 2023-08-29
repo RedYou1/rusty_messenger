@@ -1,0 +1,1 @@
+document.getElementById('status').className = (STATUS) ? "connected" : "reconnecting";
