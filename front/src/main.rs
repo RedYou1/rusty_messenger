@@ -1,27 +1,103 @@
 #![allow(non_snake_case)]
 
+mod structs;
 const BASE_API_URL: &str = "http://127.0.0.1:8000";
-
-use std::collections::HashMap;
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use futures_channel::mpsc::UnboundedReceiver;
+use futures_lite::stream::StreamExt;
+use sse_client::EventSource;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use structs::{serialize, Message};
 use tokio::runtime::Runtime;
+
+use crate::structs::deserialize;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
-enum Route {
+pub enum Route {
     #[route("/")]
     Home {},
-    #[route("/:id")]
-    Conv { id: u32 }
+    #[route("/:room")]
+    Conv { room: usize }
 }
 
+static mut NOT_INITIALIZED: bool = true;
+
+type Messages = Arc<Mutex<Box<HashMap<usize, Vec<Message>>>>>;
+
 fn page(cx: Scope) -> Element {
+    let _ = use_shared_state_provider::<Messages>(cx, || {
+        Arc::new(Mutex::new(Box::new(HashMap::<usize, Vec<Message>>::new())))
+    });
+    let messages = use_shared_state::<Messages>(cx).unwrap();
+
+    let sender = Arc::new(Mutex::new(
+        use_coroutine(cx, |mut receiver: UnboundedReceiver<Message>| unsafe {
+            let messages = messages as *const UseSharedState<Messages>;
+            async move {
+                loop {
+                    match receiver.next().await {
+                        Some(message) => {
+                            {
+                                let m = messages.as_ref().unwrap().write_silent();
+                                let mut messages = m.lock().unwrap();
+
+                                println!("inserting {}", message.date.to_string());
+                                if !messages.contains_key(&message.room) {
+                                    messages.insert(message.room, Vec::new());
+                                }
+                                let vec = messages.get_mut(&message.room).unwrap();
+                                let rid = message.room;
+                                vec.push(message);
+                                println!("vec {} is now {}", rid, vec.len());
+                            }
+                            messages.as_ref().unwrap().write();
+                        }
+                        None => println!("None"),
+                    }
+                }
+            }
+        })
+        .to_owned(),
+    ));
+
+    unsafe {
+        if NOT_INITIALIZED {
+            let url = format!("{BASE_API_URL}/events/0");
+            let event_source = EventSource::new(url.as_str()).unwrap();
+            println!("new event_source");
+            let sender_thread = Arc::clone(&sender);
+            event_source.on_message(move |event| {
+                let value = json::parse(event.data.as_str()).unwrap();
+                let message = deserialize(
+                    value["date"].as_i64().unwrap(),
+                    value["room"].as_usize().unwrap(),
+                    value["user_id"].as_usize().unwrap(),
+                    value["text"].as_str().unwrap(),
+                );
+                let sender = sender_thread.lock().unwrap();
+                println!("sending {}", message.date.to_string());
+                sender.send(message);
+                println!("sent");
+                /*
+                let messages = messages.to_owned().write().borrow_mut().into_inner();
+                if messages.contains_key(&message.room) {
+                    messages.get_mut(&message.room).unwrap().push(message);
+                } else {
+                    messages.insert(message.room, vec![message]);
+                }
+                */
+            });
+        }
+        NOT_INITIALIZED = false;
+    }
+
     render! {
         link { rel: "stylesheet", href: "../dist/reset.css" }
         link { rel: "stylesheet", href: "../dist/style.css" }
-        script { src: "../dist/script.js", defer: true }
         Router::<Route> {}
     }
 }
@@ -32,13 +108,13 @@ fn SideBar(cx: Scope) -> Element {
             id: "sidebar",
             div {
                 id: "status",
-                script { src: "../dist/getStatus.js", defer: true }
+                "connected"
             }
             div {
                 id: "friends",
                 Link {
                     class: "friend active",
-                    to: Route::Conv{ id: 0 },
+                    to: Route::Conv{ room: 0 },
                     "Polo"
                 }
             }
@@ -66,7 +142,9 @@ fn SideBar(cx: Scope) -> Element {
 }
 
 #[inline_props]
-fn Conv(cx: Scope, id: u32) -> Element {
+fn Conv(cx: Scope, room: usize) -> Element {
+    let messages = use_shared_state::<Messages>(cx).unwrap();
+
     let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
 
@@ -81,7 +159,7 @@ fn Conv(cx: Scope, id: u32) -> Element {
             username = "guest";
         }
 
-        let form = HashMap::from([("room", "0"), ("username", username), ("message", message)]);
+        let form = serialize(room.clone(), 0, message.to_string());
 
         let url = format!("{BASE_API_URL}/message");
         Runtime::new().unwrap().block_on(async {
@@ -93,16 +171,33 @@ fn Conv(cx: Scope, id: u32) -> Element {
         return ();
     };
 
+    let m = messages.read();
+    let m2 = m.lock().unwrap();
+    let empty = Vec::<Message>::new();
+    let vec = m2.get(&room);
+    let messages = vec.unwrap_or_else(|| &empty);
+
+    if vec.is_none() {
+        println!("display room {} with null elements", room);
+    } else {
+        println!("display room {} with {} elements", room, messages.len());
+    }
+
     render! {
         SideBar {}
         div{
             id:"content",
-            span { id.to_string() }
+            span { room.to_string() }
+            span { message.len().to_string() }
             div{
                 id: "messages",
-                message_element {
-                    username: String::from("Polo"),
-                    text: String::from("Jack a dit")
+                for msg in messages {
+                    message_element {
+                        date: msg.date,
+                        room: msg.room,
+                        user_id: msg.user_id,
+                        text: msg.text.to_string()
+                    }
                 }
             }
 
@@ -151,19 +246,13 @@ fn Home(cx: Scope) -> Element {
     }
 }
 
-#[derive(PartialEq, Props)]
-struct Message {
-    username: String,
-    text: String,
-}
-
 fn message_element(cx: Scope<Message>) -> Element {
     return render! {
         div{
             class: "message",
             span{
                 class: "username",
-                cx.props.username.as_str()
+                cx.props.user_id.to_string()
             },
             span{
                 class: "text",
