@@ -3,7 +3,6 @@ use dotenv::dotenv;
 use rocket::serde::ser::StdError;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::{Connection, Result, Row};
-use std::env::current_dir;
 use std::error::Error;
 use std::fmt::Display;
 use std::{env, fmt};

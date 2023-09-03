@@ -1,19 +1,19 @@
 #![allow(non_snake_case)]
 
+mod event_source;
 mod structs;
-const BASE_API_URL: &str = "http://127.0.0.1:8000";
+pub const BASE_API_URL: &'static str = "http://127.0.0.1:8000";
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_lite::stream::StreamExt;
-use sse_client::EventSource;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use structs::{serialize, Message};
 use tokio::runtime::Runtime;
 
-use crate::structs::deserialize;
+use crate::event_source::SourceState;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
@@ -24,17 +24,18 @@ pub enum Route {
     Conv { room: usize }
 }
 
-static mut NOT_INITIALIZED: bool = true;
-
 type Messages = Arc<Mutex<Box<HashMap<usize, Vec<Message>>>>>;
 
 fn page(cx: Scope) -> Element {
     let _ = use_shared_state_provider::<Messages>(cx, || {
         Arc::new(Mutex::new(Box::new(HashMap::<usize, Vec<Message>>::new())))
     });
-    let messages = use_shared_state::<Messages>(cx).unwrap();
+    let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Disconnected);
 
-    let sender = Arc::new(Mutex::new(
+    let messages = use_shared_state::<Messages>(cx).unwrap();
+    let source_state = use_shared_state::<SourceState>(cx).unwrap();
+
+    let message_sender = Arc::new(Mutex::new(
         use_coroutine(cx, |mut receiver: UnboundedReceiver<Message>| unsafe {
             let messages = messages as *const UseSharedState<Messages>;
             async move {
@@ -45,14 +46,11 @@ fn page(cx: Scope) -> Element {
                                 let m = messages.as_ref().unwrap().write_silent();
                                 let mut messages = m.lock().unwrap();
 
-                                println!("inserting {}", message.date.to_string());
                                 if !messages.contains_key(&message.room) {
                                     messages.insert(message.room, Vec::new());
                                 }
                                 let vec = messages.get_mut(&message.room).unwrap();
-                                let rid = message.room;
                                 vec.push(message);
-                                println!("vec {} is now {}", rid, vec.len());
                             }
                             messages.as_ref().unwrap().write();
                         }
@@ -64,35 +62,26 @@ fn page(cx: Scope) -> Element {
         .to_owned(),
     ));
 
-    unsafe {
-        if NOT_INITIALIZED {
-            let url = format!("{BASE_API_URL}/events/0");
-            let event_source = EventSource::new(url.as_str()).unwrap();
-            println!("new event_source");
-            let sender_thread = Arc::clone(&sender);
-            event_source.on_message(move |event| {
-                let value = json::parse(event.data.as_str()).unwrap();
-                let message = deserialize(
-                    value["date"].as_i64().unwrap(),
-                    value["room"].as_usize().unwrap(),
-                    value["user_id"].as_usize().unwrap(),
-                    value["text"].as_str().unwrap(),
-                );
-                let sender = sender_thread.lock().unwrap();
-                println!("sending {}", message.date.to_string());
-                sender.send(message);
-                println!("sent");
-                /*
-                let messages = messages.to_owned().write().borrow_mut().into_inner();
-                if messages.contains_key(&message.room) {
-                    messages.get_mut(&message.room).unwrap().push(message);
-                } else {
-                    messages.insert(message.room, vec![message]);
+    let source_state_sender = Arc::new(Mutex::new(
+        use_coroutine(cx, |mut receiver: UnboundedReceiver<SourceState>| unsafe {
+            let source_state = source_state as *const UseSharedState<SourceState>;
+            async move {
+                loop {
+                    match receiver.next().await {
+                        Some(state) => {
+                            let mut s = source_state.as_ref().unwrap().write();
+                            *s = state;
+                        }
+                        None => println!("None"),
+                    }
                 }
-                */
-            });
-        }
-        NOT_INITIALIZED = false;
+            }
+        })
+        .to_owned(),
+    ));
+
+    if *source_state.read() == SourceState::Disconnected {
+        let _ = event_source::MyEventSource::new(&message_sender, &source_state_sender);
     }
 
     render! {
@@ -103,12 +92,20 @@ fn page(cx: Scope) -> Element {
 }
 
 fn SideBar(cx: Scope) -> Element {
+    let source_state = use_shared_state::<SourceState>(cx).unwrap();
+
+    let state = match *source_state.read() {
+        SourceState::Disconnected => "disconnected",
+        SourceState::ReConnecting => "reconnecting",
+        SourceState::Connected => "connected",
+    };
+
     render! {
         div {
             id: "sidebar",
             div {
                 id: "status",
-                "connected"
+                class: state
             }
             div {
                 id: "friends",
@@ -149,24 +146,16 @@ fn Conv(cx: Scope, room: usize) -> Element {
     let message = use_state(cx, || String::new());
 
     let send = move |_| {
-        let mut username: &str = username;
-
         if message.is_empty() {
             println!("Empty message");
             return;
         }
-        if username.is_empty() {
-            username = "guest";
-        }
-
         let form = serialize(room.clone(), 0, message.to_string());
 
         let url = format!("{BASE_API_URL}/message");
         Runtime::new().unwrap().block_on(async {
-            println!("Submitting... {username:?}: {message:?}");
             let _ = reqwest::Client::new().post(&url).form(&form).send().await;
             message.set(String::new());
-            println!("Submitted! {username:?}: {message:?}");
         });
         return ();
     };
@@ -176,12 +165,6 @@ fn Conv(cx: Scope, room: usize) -> Element {
     let empty = Vec::<Message>::new();
     let vec = m2.get(&room);
     let messages = vec.unwrap_or_else(|| &empty);
-
-    if vec.is_none() {
-        println!("display room {} with null elements", room);
-    } else {
-        println!("display room {} with {} elements", room, messages.len());
-    }
 
     render! {
         SideBar {}

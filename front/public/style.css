@@ -157,12 +157,21 @@
       text-align: center;
       font-size: 12px;
   }
-  
-  #status.pending::before {
-    content: "status: connected";
+
+  #status.disconnected::before {
+    content: "status: disconnected";
   }
   
-  #status.pending {
+  #status.disconnected {
+      background-color: red;
+      color: #fff;
+  }
+  
+  #status.reconnecting::before {
+    content: "status: reconnecting";
+  }
+  
+  #status.reconnecting {
       background-color: yellow;
       color: #000;
   }
@@ -173,14 +182,5 @@
   
   #status.connected {
       background-color: green;
-      color: #fff;
-  }
-  
-  #status.reconnecting::before {
-    content: "status: reconnecting";
-  }
-  
-  #status.reconnecting {
-      background-color: red;
       color: #fff;
   }
