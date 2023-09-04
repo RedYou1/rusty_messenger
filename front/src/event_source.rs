@@ -21,13 +21,15 @@ pub struct MyEventSource {
 
 impl MyEventSource {
     pub fn new(
+        user_id: i64,
+        api_key: &str,
         message_sender: &Arc<Mutex<Coroutine<Message>>>,
         source_state_sender: &Arc<Mutex<Coroutine<SourceState>>>,
     ) -> MyEventSource {
         let init = Arc::clone(source_state_sender);
         set_source_state(&init, SourceState::ReConnecting);
 
-        let url = format!("{BASE_API_URL}/events/0");
+        let url = format!("{BASE_API_URL}/events/{}/{}", user_id, api_key);
 
         let event_source = MyEventSource {
             source: EventSource::new(url.as_str()).unwrap(),

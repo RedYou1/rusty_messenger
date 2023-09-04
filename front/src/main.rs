@@ -10,10 +10,11 @@ use futures_channel::mpsc::UnboundedReceiver;
 use futures_lite::stream::StreamExt;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use structs::{serialize, Message};
+use structs::{serialize_login, serialize_message, Message};
 use tokio::runtime::Runtime;
 
 use crate::event_source::SourceState;
+use crate::structs::User;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
@@ -31,8 +32,10 @@ fn page(cx: Scope) -> Element {
         Arc::new(Mutex::new(Box::new(HashMap::<usize, Vec<Message>>::new())))
     });
     let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Disconnected);
+    let _ = use_shared_state_provider::<Option<User>>(cx, || None);
 
     let messages = use_shared_state::<Messages>(cx).unwrap();
+    let user = use_shared_state::<Option<User>>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
 
     let message_sender = Arc::new(Mutex::new(
@@ -80,8 +83,16 @@ fn page(cx: Scope) -> Element {
         .to_owned(),
     ));
 
-    if *source_state.read() == SourceState::Disconnected {
-        let _ = event_source::MyEventSource::new(&message_sender, &source_state_sender);
+    let r = user.read();
+    let u = (*r).as_ref();
+    if *source_state.read() == SourceState::Disconnected && u.is_some() {
+        let u = u.unwrap();
+        let _ = event_source::MyEventSource::new(
+            u.id,
+            u.api_key.as_str(),
+            &message_sender,
+            &source_state_sender,
+        );
     }
 
     render! {
@@ -140,9 +151,9 @@ fn SideBar(cx: Scope) -> Element {
 
 #[inline_props]
 fn Conv(cx: Scope, room: usize) -> Element {
+    let user = use_shared_state::<Option<User>>(cx).unwrap();
     let messages = use_shared_state::<Messages>(cx).unwrap();
 
-    let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
 
     let send = move |_| {
@@ -150,11 +161,37 @@ fn Conv(cx: Scope, room: usize) -> Element {
             println!("Empty message");
             return;
         }
-        let form = serialize(room.clone(), 0, message.to_string());
+        let id: i64;
+        let username: String;
+        let form: HashMap<&str, String>;
+        {
+            let r = user.read();
+            let user = r.as_ref().unwrap();
+            id = user.id;
+            username = user.username.to_string();
+            form = serialize_message(
+                room.clone(),
+                user.id,
+                user.api_key.to_string(),
+                message.to_string(),
+            );
+        }
 
         let url = format!("{BASE_API_URL}/message");
         Runtime::new().unwrap().block_on(async {
-            let _ = reqwest::Client::new().post(&url).form(&form).send().await;
+            let res = reqwest::Client::new().post(&url).form(&form).send().await;
+            if res.is_ok() {
+                let r = res.unwrap().text().await.unwrap();
+                let value = json::parse(r.as_str()).unwrap();
+                if value["status_code"].as_u16().unwrap() == 201 {
+                    let mut u = user.write();
+                    *u = Some(User {
+                        id: id,
+                        username: username,
+                        api_key: value["api_key"].as_str().unwrap().to_string(),
+                    });
+                }
+            }
             message.set(String::new());
         });
         return ();
@@ -190,16 +227,6 @@ fn Conv(cx: Scope, room: usize) -> Element {
                 onsubmit: send,
                 input {
                     r#type: "text",
-                    name: "username",
-                    id: "username",
-                    autocomplete: "off",
-                    placeholder: "guest",
-                    maxlength: "19",
-                    oninput: move |evt| username.set(evt.value.clone()),
-                    value: "{username}"
-                }
-                input {
-                    r#type: "text",
                     name: "message",
                     id: "message",
                     autocomplete: "off",
@@ -220,11 +247,80 @@ fn Conv(cx: Scope, room: usize) -> Element {
 
 #[inline_props]
 fn Home(cx: Scope) -> Element {
+    let user = use_shared_state::<Option<User>>(cx).unwrap();
+    let username = use_state(cx, || String::new());
+    let password = use_state(cx, || String::new());
+
+    let send = move |_| {
+        if username.is_empty() {
+            println!("Empty username");
+            return;
+        }
+        if password.is_empty() {
+            println!("Empty password");
+            return;
+        }
+        let form = serialize_login(username.to_string(), password.to_string());
+
+        let url = format!("{BASE_API_URL}/login");
+        Runtime::new().unwrap().block_on(async {
+            let res = reqwest::Client::new().post(&url).form(&form).send().await;
+            if res.is_ok() {
+                let r = res.unwrap().text().await.unwrap();
+                let value = json::parse(r.as_str()).unwrap();
+                if value["status_code"].as_u16().unwrap() == 202 {
+                    let mut u = user.write();
+                    *u = Some(User {
+                        id: value["user_id"].as_i64().unwrap(),
+                        username: username.to_string(),
+                        api_key: value["api_key"].as_str().unwrap().to_string(),
+                    });
+                }
+            }
+        });
+        return ();
+    };
+
+    let mut v = Vec::new();
+
+    if user.read().is_some() {
+        v.push(0);
+    }
+
     render! {
-        SideBar {}
+        for _ in v {
+            SideBar{}
+        },
         div{
             id:"content",
-            "Home"
+            form {
+                id: "login",
+                prevent_default: "onsubmit",
+                onsubmit: send,
+                input {
+                    r#type: "text",
+                    name: "username",
+                    id: "username",
+                    autocomplete: "off",
+                    placeholder: "username",
+                    oninput: move |evt| username.set(evt.value.clone()),
+                    value: "{username}"
+                }
+                input {
+                    r#type: "password",
+                    name: "password",
+                    id: "password",
+                    autocomplete: "off",
+                    placeholder: "password",
+                    oninput: move |evt| password.set(evt.value.clone()),
+                    value: "{password}"
+                }
+                button {
+                    id: "send",
+                    r#type: "submit",
+                    "Send"
+                }
+            }
         }
     }
 }
