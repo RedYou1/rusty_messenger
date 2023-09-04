@@ -58,7 +58,7 @@ fn login(form: Form<FormAddUser>) -> String {
 
 /// Returns an infinite stream of server-sent events. Each event is a message
 /// pulled from a broadcast queue sent by the `post` handler.
-#[get("/events/<user_id>/<api_key>")]
+#[get("/events/<user_id>?<api_key>")]
 async fn events(
     user_id: i64,
     api_key: String,

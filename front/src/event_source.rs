@@ -29,7 +29,7 @@ impl MyEventSource {
         let init = Arc::clone(source_state_sender);
         set_source_state(&init, SourceState::ReConnecting);
 
-        let url = format!("{BASE_API_URL}/events/{}/{}", user_id, api_key);
+        let url = format!("{BASE_API_URL}/events/{}?api_key={}", user_id, api_key);
 
         let event_source = MyEventSource {
             source: EventSource::new(url.as_str()).unwrap(),
