@@ -74,10 +74,11 @@ pub fn establish_connection() -> Result<Connection> {
             id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
             password TEXT NOT NULL,
-            api_key TEXT NOT NULL,
-
-            UNIQUE(username)
+            api_key TEXT NOT NULL
         );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS user_username
+            on user (username);
         
         CREATE TABLE IF NOT EXISTS message
         (
@@ -88,7 +89,14 @@ pub fn establish_connection() -> Result<Connection> {
             
             UNIQUE(room, user_id, date),
             FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
-        );",
+        );
+        
+        CREATE INDEX IF NOT EXISTS message_room
+            on message (room);
+
+        CREATE INDEX IF NOT EXISTS message_user_id
+            on message (user_id);
+        ",
     )?;
 
     return Ok(conn);

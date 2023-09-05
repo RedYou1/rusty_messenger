@@ -3,6 +3,7 @@
 mod conv;
 mod event_source;
 mod home;
+mod login;
 mod side_bar;
 mod structs;
 
@@ -19,6 +20,7 @@ use structs::Message;
 use crate::conv::Conv;
 use crate::event_source::SourceState;
 use crate::home::Home;
+use crate::login::LogIn;
 use crate::structs::User;
 
 #[derive(Routable, Clone)]
@@ -26,6 +28,8 @@ use crate::structs::User;
 pub enum Route {
     #[route("/")]
     Home {},
+    #[route("/login")]
+    LogIn {},
     #[route("/:room")]
     Conv { room: usize }
 }
