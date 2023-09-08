@@ -7,6 +7,8 @@ use std::error::Error;
 use std::fmt::Display;
 use std::{env, fmt};
 
+use crate::room::Room;
+
 pub struct DateTimeSql(pub NaiveDateTime);
 
 #[derive(Debug, Clone, Copy)]
@@ -76,34 +78,50 @@ pub fn establish_connection() -> Result<Connection> {
 
         CREATE UNIQUE INDEX IF NOT EXISTS user_username
             on user (username);
-        
+
+        CREATE TABLE IF NOT EXISTS room
+        (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS message
         (
             date INTEGER NOT NULL,
-            room INTEGER NOT NULL,
+            room_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
             text TEXT NOT NULL,
-            
-            UNIQUE(room, user_id, date),
-            FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE
-        );
-        
-        CREATE INDEX IF NOT EXISTS message_room
-            on message (room);
 
-        CREATE INDEX IF NOT EXISTS message_user_id
-            on message (user_id);
+            UNIQUE(room_id, user_id, date),
+            FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE,
+            FOREIGN KEY(room_id) REFERENCES room(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS user_room
+        (
+            user_id INTEGER NOT NULL,
+            room_id INTEGER NOT NULL,
+
+            PRIMARY KEY(user_id, room_id),
+            FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE,
+            FOREIGN KEY(room_id) REFERENCES room(id) ON DELETE CASCADE
+        );
         ",
     )?;
 
     return Ok(conn);
 }
 
-pub fn load_rooms(conn: &Connection, user_id: i64) -> Result<Vec<i64>> {
-    let mut stmt = conn.prepare("SELECT DISTINCT room FROM message WHERE user_id = ?1")?;
+pub fn load_rooms(conn: &Connection, user_id: i64) -> Result<Vec<Room>> {
+    let mut stmt = conn.prepare("SELECT room.id, room.name FROM user_room INNER JOIN room on room.id = user_room.room_id WHERE user_id = ?1")?;
     let rows = stmt.query([user_id])?;
 
-    let m = rows.mapped(|row| row.get::<usize, i64>(0));
+    let m = rows.mapped(|row| {
+        Ok(Room {
+            id: row.get::<usize, i64>(0)?,
+            name: row.get::<usize, String>(1)?,
+        })
+    });
 
     return m.collect();
 }

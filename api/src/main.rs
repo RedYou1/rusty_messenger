@@ -4,13 +4,12 @@ extern crate rocket;
 mod auth;
 mod db;
 mod message;
+mod room;
 mod user;
-
-use std::collections::HashMap;
 
 use auth::{validate_login, validate_user_key};
 use db::{establish_connection, load_rooms};
-use message::{add_message, load_messages, FormMessage, MessageSerialized};
+use message::{add_message, load_messages, FormMessage};
 use rocket::form::Form;
 use rocket::fs::{relative, FileServer};
 use rocket::http::Status;
@@ -19,9 +18,11 @@ use rocket::tokio::select;
 use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
 use rocket::tokio::sync::RwLock;
 use rocket::{Shutdown, State};
+use room::{add_room, FormAddRoom};
+use std::collections::HashMap;
 use user::{add_user, logout, user_select_id, FormAddUser};
 
-type Convs = RwLock<HashMap<i64, Sender<MessageSerialized>>>;
+type Convs = RwLock<HashMap<i64, Sender<String>>>;
 
 #[post("/adduser", data = "<form>")]
 fn post_adduser(form: Form<FormAddUser>) -> String {
@@ -58,35 +59,34 @@ fn post_login(form: Form<FormAddUser>) -> String {
     );
 }
 
-#[get("/rooms/all/<user_id>?<api_key>")]
-fn get_rooms(user_id: i64, api_key: String) -> String {
+#[post("/room", data = "<form>")]
+async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
     let conn = establish_connection().unwrap();
 
-    let user = validate_user_key(&conn, user_id, api_key.as_str());
-    if let Err(e) = user {
+    let inform = form.into_inner();
+    let user_id = inform.user_id;
+    let user = validate_user_key(&conn, inform.user_id, inform.api_key.as_str());
+    if user.is_err() {
         return format!(
             "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
             Status::Unauthorized.code,
-            e
+            user.unwrap_err()
         );
     }
 
-    let rooms = load_rooms(&conn, user_id);
+    let room = add_room(&conn, inform).unwrap();
 
-    if let Err(e) = rooms {
-        return format!(
-            "{{ \"status_code\": {}, \"status\": \"InternalServerError\", \"api_key\": \"{}\", \"reason\": \"{}\" }}",
-            Status::InternalServerError.code,
-            user.unwrap(),
-            e.to_string()
-        );
+    let lock = convs.read().await;
+    let conv = lock.get(&user_id);
+
+    if conv.is_some() {
+        // A send 'fails' if there are no active subscribers. That's okay.
+        let _ = conv.unwrap().send(room.serialize());
     }
-
     return format!(
-        "{{ \"status_code\": {}, \"status\": \"Ok\", \"api_key\": \"{}\", \"rooms\": {:?} }}",
-        Status::Ok.code,
-        user.unwrap(),
-        rooms.unwrap()
+        "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
+        Status::Created.code,
+        user.unwrap()
     );
 }
 
@@ -126,7 +126,7 @@ async fn get_events(
         match trx {
             Some(t) => rx = t,
             None => {
-                let t = Some(channel::<MessageSerialized>(1024).0);
+                let t = Some(channel::<String>(1024).0);
                 let mut lock = convs.write().await;
                 lock.insert(user_id, t.unwrap());
                 rx = lock.get(&user_id).unwrap().subscribe();
@@ -135,8 +135,12 @@ async fn get_events(
     }
 
     let messages = load_messages(&conn, user_id).unwrap();
+    let rooms = load_rooms(&conn, user_id).unwrap();
 
     return Ok(EventStream! {
+        for rm in rooms {
+            yield Event::json(&rm.serialize());
+        };
         for msg in messages {
             yield Event::json(&msg.serialize());
         };
@@ -192,7 +196,7 @@ mod cors;
 
 #[launch]
 fn rocket() -> _ {
-    let c: Convs = RwLock::new(HashMap::<i64, Sender<MessageSerialized>>::new());
+    let c: Convs = RwLock::new(HashMap::<i64, Sender<String>>::new());
 
     rocket::build()
         .attach(crate::cors::CORS)
@@ -202,9 +206,9 @@ fn rocket() -> _ {
             routes![
                 post_adduser,
                 post_login,
-                get_rooms,
                 get_events,
-                post_message
+                post_message,
+                post_addroom
             ],
         )
         .mount("/", FileServer::from(relative!("static")))

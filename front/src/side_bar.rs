@@ -1,11 +1,16 @@
+use std::collections::HashMap;
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use tokio::runtime::Runtime;
 
-use crate::{account::AccountManager, event_source::SourceState, Route};
+use crate::{account::AccountManager, event_source::SourceState, Rooms, Route, BASE_API_URL};
 
 pub fn SideBar(cx: Scope) -> Element {
-    let user = use_shared_state::<AccountManager>(cx).unwrap().to_owned();
+    let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
+    let rooms = use_shared_state::<Rooms>(cx).unwrap();
+    let name = use_state(cx, || String::new());
 
     let state = match *source_state.read() {
         SourceState::Disconnected => "disconnected",
@@ -13,13 +18,43 @@ pub fn SideBar(cx: Scope) -> Element {
         SourceState::Connected => "connected",
     };
 
-    let user_rooms: &UseFuture<Result<Vec<i64>, String>> = use_future(cx, (), |_| async move {
-        //if let Some(a) = user.write_silent().as_mut() {
-        //    return a.load_rooms().await;
-        //}
-        return Err(String::from("not logged in"));
-    })
-    .to_owned();
+    let send = move |_| {
+        if name.is_empty() {
+            println!("Empty message");
+            return;
+        }
+        let form: HashMap<&str, String>;
+        {
+            let r = user.read();
+            let t = r.as_ref().unwrap();
+            form = HashMap::<&'static str, String>::from([
+                ("user_id", t.user.id.to_string()),
+                ("api_key", t.user.api_key.to_string()),
+                ("name", name.to_string()),
+            ]);
+        }
+
+        let url = format!("{BASE_API_URL}/room");
+        Runtime::new().unwrap().block_on(async {
+            let res = reqwest::Client::new().post(&url).form(&form).send().await;
+            if res.is_ok() {
+                let r = res.unwrap().text().await.unwrap();
+                let value = json::parse(r.as_str()).unwrap();
+                if value["status_code"].as_u16().unwrap() == 201 {
+                    let mut u = user.write();
+                    let l = u.as_mut().unwrap();
+                    l.user.api_key = value["api_key"].as_str().unwrap().to_string();
+
+                    name.set(String::new());
+                }
+            }
+        });
+        return ();
+    };
+
+    let m = rooms.read();
+    let m2 = m.lock().unwrap();
+    let rooms = m2.as_ref();
 
     render! {
         div {
@@ -30,31 +65,27 @@ pub fn SideBar(cx: Scope) -> Element {
             }
             div {
                 id: "friends",
-                match user_rooms.value() {
-                    Some(Ok(rooms)) => render!{for room in rooms {
-                        Link {
-                            class: "friend active",
-                            to: Route::Conv{ room: *room },
-                            room.to_string()
-                        }
-                    }},
-                    Some(Err(e)) => render!{span{e.to_string()}},
-                    None => render!{span{"Loading..."}}
+                for room in rooms {
+                    Link {
+                        class: "friend active",
+                        to: Route::Conv{ room: room.id },
+                        room.name.as_str()
+                    }
                 }
             }
             form {
                 id: "new-friend",
-                onsubmit: move |event| {
-                    let name = event.data.values.get("name").unwrap().first().unwrap();
-                    println!("Submitted! {name:?}")
-                },
+                prevent_default: "onsubmit",
+                onsubmit: send,
                 input {
                     r#type: "text",
                     name: "name",
                     id: "name",
                     autocomplete: "off",
                     placeholder: "new friend",
-                    maxlength: "29"
+                    maxlength: "29",
+                    oninput: move |evt| name.set(evt.value.clone()),
+                    value: "{name}"
                 }
                 input {
                     r#type: "submit",

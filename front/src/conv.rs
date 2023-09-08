@@ -41,11 +41,10 @@ pub fn Conv(cx: Scope, room: i64) -> Element {
                 if value["status_code"].as_u16().unwrap() == 201 {
                     let mut u = user.write();
                     let l = u.as_mut().unwrap();
-                    l.user.api_key =
-                        value["api_key"].as_str().unwrap().to_string();
+                    l.user.api_key = value["api_key"].as_str().unwrap().to_string();
+                    message.set(String::new());
                 }
             }
-            message.set(String::new());
         });
         return ();
     };
@@ -67,7 +66,7 @@ pub fn Conv(cx: Scope, room: i64) -> Element {
                         for msg in messages {
                             message_element {
                                 date: msg.date,
-                                room: msg.room,
+                                room_id: msg.room_id,
                                 user_id: msg.user_id,
                                 text: msg.text.to_string()
                             }
