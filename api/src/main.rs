@@ -3,12 +3,14 @@ extern crate rocket;
 
 mod auth;
 mod db;
-mod structs;
+mod message;
+mod user;
 
 use std::collections::HashMap;
 
 use auth::{validate_login, validate_user_key};
-use db::user_select_id;
+use db::{establish_connection, load_rooms};
+use message::{add_message, load_messages, FormMessage, MessageSerialized};
 use rocket::form::Form;
 use rocket::fs::{relative, FileServer};
 use rocket::http::Status;
@@ -17,14 +19,14 @@ use rocket::tokio::select;
 use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
 use rocket::tokio::sync::RwLock;
 use rocket::{Shutdown, State};
-use structs::{FormAddUser, FormMessage, MessageSerialized};
+use user::{add_user, logout, user_select_id, FormAddUser};
 
 type Convs = RwLock<HashMap<i64, Sender<MessageSerialized>>>;
 
 #[post("/adduser", data = "<form>")]
-fn adduser(form: Form<FormAddUser>) -> String {
-    let conn = db::establish_connection().unwrap();
-    let user = db::add_user(&conn, form.into_inner()).unwrap();
+fn post_adduser(form: Form<FormAddUser>) -> String {
+    let conn = establish_connection().unwrap();
+    let user = add_user(&conn, form.into_inner()).unwrap();
 
     return format!(
         "{{ \"id\": {}, \"username\": \"{}\" }}",
@@ -33,8 +35,8 @@ fn adduser(form: Form<FormAddUser>) -> String {
 }
 
 #[post("/login", data = "<form>")]
-fn login(form: Form<FormAddUser>) -> String {
-    let conn = db::establish_connection().unwrap();
+fn post_login(form: Form<FormAddUser>) -> String {
+    let conn = establish_connection().unwrap();
     let user = form.into_inner();
     let r = validate_login(&conn, user.username.as_str(), user.password.as_str());
 
@@ -56,16 +58,48 @@ fn login(form: Form<FormAddUser>) -> String {
     );
 }
 
+#[get("/rooms/all/<user_id>?<api_key>")]
+fn get_rooms(user_id: i64, api_key: String) -> String {
+    let conn = establish_connection().unwrap();
+
+    let user = validate_user_key(&conn, user_id, api_key.as_str());
+    if let Err(e) = user {
+        return format!(
+            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+            Status::Unauthorized.code,
+            e
+        );
+    }
+
+    let rooms = load_rooms(&conn, user_id);
+
+    if let Err(e) = rooms {
+        return format!(
+            "{{ \"status_code\": {}, \"status\": \"InternalServerError\", \"api_key\": \"{}\", \"reason\": \"{}\" }}",
+            Status::InternalServerError.code,
+            user.unwrap(),
+            e.to_string()
+        );
+    }
+
+    return format!(
+        "{{ \"status_code\": {}, \"status\": \"Ok\", \"api_key\": \"{}\", \"rooms\": {:?} }}",
+        Status::Ok.code,
+        user.unwrap(),
+        rooms.unwrap()
+    );
+}
+
 /// Returns an infinite stream of server-sent events. Each event is a message
 /// pulled from a broadcast queue sent by the `post` handler.
 #[get("/events/<user_id>?<api_key>")]
-async fn events(
+async fn get_events(
     user_id: i64,
     api_key: String,
     convs: &State<Convs>,
     mut end: Shutdown,
 ) -> Result<EventStream![], String> {
-    let conn = db::establish_connection().unwrap();
+    let conn = establish_connection().unwrap();
 
     let bduser = user_select_id(&conn, user_id)?;
     let bdapi_key = bduser.api_key.as_str();
@@ -100,7 +134,7 @@ async fn events(
         }
     }
 
-    let messages = db::load_messages(&conn, user_id).unwrap();
+    let messages = load_messages(&conn, user_id).unwrap();
 
     return Ok(EventStream! {
         for msg in messages {
@@ -111,7 +145,7 @@ async fn events(
                 msg = rx.recv() => match msg {
                     Ok(msg) => msg,
                     Err(RecvError::Closed) => {
-                        let _ = db::logout(&conn, user_id).unwrap();
+                        let _ = logout(&conn, user_id).unwrap();
                         break;
                     },
                     Err(RecvError::Lagged(_)) => continue,
@@ -125,8 +159,8 @@ async fn events(
 }
 
 #[post("/message", data = "<form>")]
-async fn message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
-    let conn = db::establish_connection().unwrap();
+async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
+    let conn = establish_connection().unwrap();
 
     let inform = form.into_inner();
     let user = validate_user_key(&conn, inform.user_id, inform.api_key.as_str());
@@ -138,7 +172,7 @@ async fn message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
         );
     }
 
-    let message = db::add_message(&conn, inform).unwrap();
+    let message = add_message(&conn, inform).unwrap();
 
     let lock = convs.read().await;
     let conv = lock.get(&message.user_id);
@@ -163,6 +197,15 @@ fn rocket() -> _ {
     rocket::build()
         .attach(crate::cors::CORS)
         .manage(c)
-        .mount("/", routes![adduser, login, events, message])
+        .mount(
+            "/",
+            routes![
+                post_adduser,
+                post_login,
+                get_rooms,
+                get_events,
+                post_message
+            ],
+        )
         .mount("/", FileServer::from(relative!("static")))
 }

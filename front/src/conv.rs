@@ -2,14 +2,15 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 
+use crate::account::AccountManager;
 use crate::side_bar::SideBar;
-use crate::structs::{serialize_message, Message, User};
+use crate::structs::{serialize_message, Message};
 use crate::Messages;
 use crate::BASE_API_URL;
 
 #[inline_props]
-pub fn Conv(cx: Scope, room: usize) -> Element {
-    let user = use_shared_state::<Option<User>>(cx).unwrap();
+pub fn Conv(cx: Scope, room: i64) -> Element {
+    let user = use_shared_state::<AccountManager>(cx).unwrap();
     let messages = use_shared_state::<Messages>(cx).unwrap();
 
     let message = use_state(cx, || String::new());
@@ -19,18 +20,14 @@ pub fn Conv(cx: Scope, room: usize) -> Element {
             println!("Empty message");
             return;
         }
-        let id: i64;
-        let username: String;
         let form: HashMap<&str, String>;
         {
             let r = user.read();
-            let user = r.as_ref().unwrap();
-            id = user.id;
-            username = user.username.to_string();
+            let t = r.as_ref().unwrap();
             form = serialize_message(
                 room.clone(),
-                user.id,
-                user.api_key.to_string(),
+                t.user.id,
+                t.user.api_key.to_string(),
                 message.to_string(),
             );
         }
@@ -43,11 +40,9 @@ pub fn Conv(cx: Scope, room: usize) -> Element {
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
                     let mut u = user.write();
-                    *u = Some(User {
-                        id: id,
-                        username: username,
-                        api_key: value["api_key"].as_str().unwrap().to_string(),
-                    });
+                    let l = u.as_mut().unwrap();
+                    l.user.api_key =
+                        value["api_key"].as_str().unwrap().to_string();
                 }
             }
             message.set(String::new());

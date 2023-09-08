@@ -2,13 +2,14 @@ use dioxus::prelude::Scope;
 use dioxus::prelude::*;
 use tokio::runtime::Runtime;
 
+use crate::account::{Account, AccountManager};
 use crate::side_bar::SideBar;
 use crate::structs::{serialize_login, User};
 use crate::BASE_API_URL;
 
 #[inline_props]
 pub fn LogIn(cx: Scope) -> Element {
-    let user = use_shared_state::<Option<User>>(cx).unwrap();
+    let user = use_shared_state::<AccountManager>(cx).unwrap();
     let username = use_state(cx, || String::new());
     let password = use_state(cx, || String::new());
 
@@ -31,11 +32,11 @@ pub fn LogIn(cx: Scope) -> Element {
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 202 {
                     let mut u = user.write();
-                    *u = Some(User {
+                    *u = Some(Account::new(User {
                         id: value["user_id"].as_i64().unwrap(),
                         username: username.to_string(),
                         api_key: value["api_key"].as_str().unwrap().to_string(),
-                    });
+                    }));
                 }
             }
         });
@@ -43,7 +44,7 @@ pub fn LogIn(cx: Scope) -> Element {
     };
 
     render! {
-        match *user.read() {
+        match user.read().as_ref() {
             Some(_) => render!{SideBar{}},
             None => render!{div{}}
         }

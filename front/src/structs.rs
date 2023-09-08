@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use dioxus::prelude::*;
 
+#[derive(PartialEq)]
 pub struct User {
     pub id: i64,
     pub username: String,
@@ -14,12 +15,12 @@ pub struct User {
 #[derive(Debug, Clone, PartialEq, Props)]
 pub struct Message {
     pub date: DateTime<Utc>,
-    pub room: usize,
-    pub user_id: usize,
+    pub room: i64,
+    pub user_id: i64,
     pub text: String,
 }
 
-pub fn deserialize(date: i64, room: usize, user_id: usize, text: &str) -> Message {
+pub fn deserialize(date: i64, room: i64, user_id: i64, text: &str) -> Message {
     Message {
         date: NaiveDateTime::from_timestamp_opt(date, 0)
             .map(|odt| odt.and_utc())
@@ -35,7 +36,7 @@ pub fn serialize_login(username: String, password: String) -> HashMap<&'static s
 }
 
 pub fn serialize_message(
-    room: usize,
+    room: i64,
     user_id: i64,
     api_key: String,
     text: String,

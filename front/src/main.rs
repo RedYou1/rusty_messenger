@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+mod account;
 mod conv;
 mod event_source;
 mod home;
@@ -17,6 +18,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use structs::Message;
 
+use crate::account::AccountManager;
 use crate::conv::Conv;
 use crate::event_source::SourceState;
 use crate::home::Home;
@@ -31,20 +33,20 @@ pub enum Route {
     #[route("/login")]
     LogIn {},
     #[route("/:room")]
-    Conv { room: usize }
+    Conv { room: i64 }
 }
 
-type Messages = Arc<Mutex<Box<HashMap<usize, Vec<Message>>>>>;
+type Messages = Arc<Mutex<Box<HashMap<i64, Vec<Message>>>>>;
 
 fn page(cx: Scope) -> Element {
     let _ = use_shared_state_provider::<Messages>(cx, || {
-        Arc::new(Mutex::new(Box::new(HashMap::<usize, Vec<Message>>::new())))
+        Arc::new(Mutex::new(Box::new(HashMap::<i64, Vec<Message>>::new())))
     });
     let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Disconnected);
-    let _ = use_shared_state_provider::<Option<User>>(cx, || None);
+    let _ = use_shared_state_provider::<AccountManager>(cx, || None);
 
     let messages = use_shared_state::<Messages>(cx).unwrap();
-    let user = use_shared_state::<Option<User>>(cx).unwrap();
+    let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
 
     let message_sender = Arc::new(Mutex::new(
@@ -93,15 +95,15 @@ fn page(cx: Scope) -> Element {
     ));
 
     let r = user.read();
-    let u = (*r).as_ref();
-    if *source_state.read() == SourceState::Disconnected && u.is_some() {
-        let u = u.unwrap();
-        let _ = event_source::MyEventSource::new(
-            u.id,
-            u.api_key.as_str(),
-            &message_sender,
-            &source_state_sender,
-        );
+    if *source_state.read() == SourceState::Disconnected {
+        if let Some(a) = r.as_ref() {
+            let _ = event_source::MyEventSource::new(
+                a.user.id,
+                a.user.api_key.as_str(),
+                &message_sender,
+                &source_state_sender,
+            );
+        }
     }
 
     render! {

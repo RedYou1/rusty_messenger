@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
-use crate::{event_source::SourceState, Route};
+use crate::{account::AccountManager, event_source::SourceState, Route};
 
 pub fn SideBar(cx: Scope) -> Element {
+    let user = use_shared_state::<AccountManager>(cx).unwrap().to_owned();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
 
     let state = match *source_state.read() {
@@ -11,6 +12,14 @@ pub fn SideBar(cx: Scope) -> Element {
         SourceState::ReConnecting => "reconnecting",
         SourceState::Connected => "connected",
     };
+
+    let user_rooms: &UseFuture<Result<Vec<i64>, String>> = use_future(cx, (), |_| async move {
+        //if let Some(a) = user.write_silent().as_mut() {
+        //    return a.load_rooms().await;
+        //}
+        return Err(String::from("not logged in"));
+    })
+    .to_owned();
 
     render! {
         div {
@@ -21,10 +30,16 @@ pub fn SideBar(cx: Scope) -> Element {
             }
             div {
                 id: "friends",
-                Link {
-                    class: "friend active",
-                    to: Route::Conv{ room: 0 },
-                    "Polo"
+                match user_rooms.value() {
+                    Some(Ok(rooms)) => render!{for room in rooms {
+                        Link {
+                            class: "friend active",
+                            to: Route::Conv{ room: *room },
+                            room.to_string()
+                        }
+                    }},
+                    Some(Err(e)) => render!{span{e.to_string()}},
+                    None => render!{span{"Loading..."}}
                 }
             }
             form {

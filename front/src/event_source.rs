@@ -50,8 +50,8 @@ impl MyEventSource {
             let value = json::parse(event.data.as_str()).unwrap();
             let message = deserialize(
                 value["date"].as_i64().unwrap(),
-                value["room"].as_usize().unwrap(),
-                value["user_id"].as_usize().unwrap(),
+                value["room"].as_i64().unwrap(),
+                value["user_id"].as_i64().unwrap(),
                 value["text"].as_str().unwrap(),
             );
             let sender = sender_thread.lock().unwrap();

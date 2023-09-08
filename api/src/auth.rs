@@ -1,9 +1,9 @@
-use crate::db::{user_select_id, user_select_username, user_update_api_key};
-
 use chrono::Utc;
 use pwhash::bcrypt;
 use rand::Rng;
 use rusqlite::{Connection, Result};
+
+use crate::user::{user_select_id, user_update_api_key, user_select_username};
 
 pub fn validate_user_key<'a, 'b>(
     conn: &'a Connection,
