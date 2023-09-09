@@ -23,7 +23,7 @@
       display: flex;
   }
   
-  a:hover:not(.active), button:hover:not(.active) {
+  a:hover:not(.active), button:hover:not(.active), .room:hover:not(.active) {
       filter: brightness(1.15);
       cursor: pointer;
   }
@@ -36,14 +36,14 @@
       background-color: var(--bg-light);
   }
   
-  #friends {
+  #rooms {
       display: flex;
       flex-direction: column;
       overflow: auto;
       flex: 1;
   }
   
-  #sidebar button, #sidebar a {
+  #sidebar button, #sidebar a, #sidebar .room {
       height: 40px;
       margin-bottom: 1px;
       background: var(--bg-light);
@@ -51,7 +51,7 @@
       overflow: hidden;
   }
   
-  #sidebar button.active, #sidebar a.active {
+  #sidebar button.active, #sidebar a.active, #sidebar .room.active {
       background: var(--bg-dark);
       color: var(--callout);
       font-weight: bold;
@@ -129,24 +129,24 @@
       padding: 0 10px;
   }
   
-  #sidebar #new-friend {
+  #sidebar #new-room {
       display: flex;
       flex: 0 0 auto;
       flex-direction: row;
   }
   
-  #new-friend input:focus, #new-friend button:hover {
+  #new-room input:focus, #new-room button:hover {
       filter: brightness(1.2);
   }
   
-  #new-friend input {
+  #new-room input {
       flex: 8 80%;
       width: 20%;
       background-color: var(--callout-dark);
       color: #fff;
   }
   
-  #new-friend button {
+  #new-room button {
       flex: 2 20%;
       width: 20%;
       background-color: var(--bg-dark);

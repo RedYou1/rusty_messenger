@@ -4,9 +4,11 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use tokio::runtime::Runtime;
 
-use crate::{event_source::SourceState, AccountManager, Rooms, Route, BASE_API_URL};
+use crate::{
+    event_source::SourceState, room::OpRoomId, AccountManager, Rooms, Route, BASE_API_URL,
+};
 
-pub fn SideBar(cx: Scope) -> Element {
+pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
@@ -56,6 +58,9 @@ pub fn SideBar(cx: Scope) -> Element {
     let m2 = m.lock().unwrap();
     let rooms = m2.as_ref();
 
+    let class_room = "room";
+    let class_room_active = "room active";
+
     render! {
         div {
             id: "sidebar",
@@ -63,18 +68,23 @@ pub fn SideBar(cx: Scope) -> Element {
                 id: "status",
                 class: state
             }
-            div {
-                id: "friends",
+            ul {
+                id: "rooms",
                 for room in rooms {
-                    Link {
-                        class: "friend active",
-                        to: Route::Conv{ room_id: room.id, room_name: room.name.to_string() },
-                        room.name.as_str()
+                    li {
+                        Link {
+                            class: match cx.props.id {
+                                Some(room_id) => if room.id == room_id { class_room_active } else { class_room },
+                                _ => class_room
+                            },
+                            to: Route::Conv{ room_id: room.id, room_name: room.name.to_string() },
+                            room.name.as_str()
+                        }
                     }
                 }
             }
             form {
-                id: "new-friend",
+                id: "new-room",
                 prevent_default: "onsubmit",
                 onsubmit: send,
                 input {
@@ -82,7 +92,7 @@ pub fn SideBar(cx: Scope) -> Element {
                     name: "name",
                     id: "name",
                     autocomplete: "off",
-                    placeholder: "new friend",
+                    placeholder: "new room",
                     maxlength: "29",
                     oninput: move |evt| name.set(evt.value.clone()),
                     value: "{name}"

@@ -54,7 +54,7 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
     let messages = m2.get(&room_id);
 
     render! {
-        SideBar{}
+        SideBar{id: *room_id}
         div{
             id:"content",
             span { room_name.as_str() }
