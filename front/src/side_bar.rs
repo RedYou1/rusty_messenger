@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use tokio::runtime::Runtime;
 
-use crate::{account::AccountManager, event_source::SourceState, Rooms, Route, BASE_API_URL};
+use crate::{event_source::SourceState, AccountManager, Rooms, Route, BASE_API_URL};
 
 pub fn SideBar(cx: Scope) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
@@ -28,8 +28,8 @@ pub fn SideBar(cx: Scope) -> Element {
             let r = user.read();
             let t = r.as_ref().unwrap();
             form = HashMap::<&'static str, String>::from([
-                ("user_id", t.user.id.to_string()),
-                ("api_key", t.user.api_key.to_string()),
+                ("user_id", t.id.to_string()),
+                ("api_key", t.api_key.to_string()),
                 ("name", name.to_string()),
             ]);
         }
@@ -43,7 +43,7 @@ pub fn SideBar(cx: Scope) -> Element {
                 if value["status_code"].as_u16().unwrap() == 201 {
                     let mut u = user.write();
                     let l = u.as_mut().unwrap();
-                    l.user.api_key = value["api_key"].as_str().unwrap().to_string();
+                    l.api_key = value["api_key"].as_str().unwrap().to_string();
 
                     name.set(String::new());
                 }
@@ -68,7 +68,7 @@ pub fn SideBar(cx: Scope) -> Element {
                 for room in rooms {
                     Link {
                         class: "friend active",
-                        to: Route::Conv{ room: room.id },
+                        to: Route::Conv{ room_id: room.id, room_name: room.name.to_string() },
                         room.name.as_str()
                     }
                 }

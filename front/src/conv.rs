@@ -2,14 +2,14 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
 
-use crate::account::AccountManager;
 use crate::side_bar::SideBar;
 use crate::structs::{serialize_message, Message};
+use crate::AccountManager;
 use crate::Messages;
 use crate::BASE_API_URL;
 
 #[inline_props]
-pub fn Conv(cx: Scope, room: i64) -> Element {
+pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let messages = use_shared_state::<Messages>(cx).unwrap();
 
@@ -25,9 +25,9 @@ pub fn Conv(cx: Scope, room: i64) -> Element {
             let r = user.read();
             let t = r.as_ref().unwrap();
             form = serialize_message(
-                room.clone(),
-                t.user.id,
-                t.user.api_key.to_string(),
+                room_id.clone(),
+                t.id,
+                t.api_key.to_string(),
                 message.to_string(),
             );
         }
@@ -41,7 +41,7 @@ pub fn Conv(cx: Scope, room: i64) -> Element {
                 if value["status_code"].as_u16().unwrap() == 201 {
                     let mut u = user.write();
                     let l = u.as_mut().unwrap();
-                    l.user.api_key = value["api_key"].as_str().unwrap().to_string();
+                    l.api_key = value["api_key"].as_str().unwrap().to_string();
                     message.set(String::new());
                 }
             }
@@ -51,14 +51,13 @@ pub fn Conv(cx: Scope, room: i64) -> Element {
 
     let m = messages.read();
     let m2 = m.lock().unwrap();
-    let messages = m2.get(&room);
+    let messages = m2.get(&room_id);
 
     render! {
         SideBar{}
         div{
             id:"content",
-            span { room.to_string() }
-            span { message.len().to_string() }
+            span { room_name.as_str() }
             div{
                 id: "messages",
                 match messages {

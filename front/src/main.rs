@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-mod account;
 mod conv;
 mod event_source;
 mod home;
@@ -13,16 +12,13 @@ pub const BASE_API_URL: &'static str = "http://127.0.0.1:8000";
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use futures_channel::mpsc::UnboundedReceiver;
-use futures_lite::stream::StreamExt;
 use room::Room;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use structs::Message;
 
-use crate::account::AccountManager;
 use crate::conv::Conv;
-use crate::event_source::SourceState;
+use crate::event_source::{event_receiver, EventReceiver, SourceState};
 use crate::home::Home;
 use crate::login::LogIn;
 use crate::structs::User;
@@ -34,9 +30,11 @@ pub enum Route {
     Home {},
     #[route("/login")]
     LogIn {},
-    #[route("/:room")]
-    Conv { room: i64 }
+    #[route("/:room_id/:room_name")]
+    Conv { room_id: i64, room_name:String }
 }
+
+pub type AccountManager = Option<User>;
 
 type Messages = Arc<Mutex<Box<HashMap<i64, Vec<Message>>>>>;
 type Rooms = Arc<Mutex<Box<Vec<Room>>>>;
@@ -56,80 +54,33 @@ fn page(cx: Scope) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
 
-    let message_sender = Arc::new(Mutex::new(
-        use_coroutine(cx, |mut receiver: UnboundedReceiver<Message>| unsafe {
-            let messages = messages as *const UseSharedState<Messages>;
-            async move {
-                loop {
-                    match receiver.next().await {
-                        Some(message) => {
-                            {
-                                let m = messages.as_ref().unwrap().write_silent();
-                                let mut messages = m.lock().unwrap();
+    let message_sender: EventReceiver<Message> =
+        event_receiver(cx, messages, |messages, message: Message| {
+            let m = messages.write();
+            let mut messages = m.lock().unwrap();
 
-                                if !messages.contains_key(&message.room_id) {
-                                    messages.insert(message.room_id, Vec::new());
-                                }
-                                let vec = messages.get_mut(&message.room_id).unwrap();
-                                vec.push(message);
-                            }
-                            messages.as_ref().unwrap().write();
-                        }
-                        None => println!("None"),
-                    }
-                }
+            if !messages.contains_key(&message.room_id) {
+                messages.insert(message.room_id, Vec::new());
             }
-        })
-        .to_owned(),
-    ));
+            let vec = messages.get_mut(&message.room_id).unwrap();
+            vec.push(message);
+        });
 
-    let room_sender = Arc::new(Mutex::new(
-        use_coroutine(cx, |mut receiver: UnboundedReceiver<Room>| unsafe {
-            let rooms = rooms as *const UseSharedState<Rooms>;
-            async move {
-                loop {
-                    match receiver.next().await {
-                        Some(room) => {
-                            {
-                                let m = rooms.as_ref().unwrap().write_silent();
-                                let mut rooms = m.lock().unwrap();
+    let room_sender: EventReceiver<Room> = event_receiver(cx, rooms, |rooms, room: Room| {
+        rooms.write().lock().unwrap().push(room);
+    });
 
-                                rooms.push(room);
-                            }
-                            rooms.as_ref().unwrap().write();
-                        }
-                        None => println!("None"),
-                    }
-                }
-            }
-        })
-        .to_owned(),
-    ));
-
-    let source_state_sender = Arc::new(Mutex::new(
-        use_coroutine(cx, |mut receiver: UnboundedReceiver<SourceState>| unsafe {
-            let source_state = source_state as *const UseSharedState<SourceState>;
-            async move {
-                loop {
-                    match receiver.next().await {
-                        Some(state) => {
-                            let mut s = source_state.as_ref().unwrap().write();
-                            *s = state;
-                        }
-                        None => println!("None"),
-                    }
-                }
-            }
-        })
-        .to_owned(),
-    ));
+    let source_state_sender: EventReceiver<SourceState> =
+        event_receiver(cx, source_state, |source_state, state: SourceState| {
+            *source_state.write() = state;
+        });
 
     let r = user.read();
     if *source_state.read() == SourceState::Disconnected {
         if let Some(a) = r.as_ref() {
             let _ = event_source::MyEventSource::new(
-                a.user.id,
-                a.user.api_key.as_str(),
+                a.id,
+                a.api_key.as_str(),
                 &message_sender,
                 &room_sender,
                 &source_state_sender,

@@ -2,9 +2,9 @@ use dioxus::prelude::Scope;
 use dioxus::prelude::*;
 use tokio::runtime::Runtime;
 
-use crate::account::{Account, AccountManager};
 use crate::side_bar::SideBar;
 use crate::structs::{serialize_login, User};
+use crate::AccountManager;
 use crate::BASE_API_URL;
 
 #[inline_props]
@@ -32,11 +32,11 @@ pub fn LogIn(cx: Scope) -> Element {
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 202 {
                     let mut u = user.write();
-                    *u = Some(Account::new(User {
+                    *u = Some(User {
                         id: value["user_id"].as_i64().unwrap(),
                         username: username.to_string(),
                         api_key: value["api_key"].as_str().unwrap().to_string(),
-                    }));
+                    });
                 }
             }
         });
