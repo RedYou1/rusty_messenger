@@ -9,7 +9,7 @@ use crate::BASE_API_URL;
 use crate::{AccountManager, Route};
 
 #[inline_props]
-pub fn LogIn(cx: Scope) -> Element {
+pub fn CreateUser(cx: Scope) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let username = use_state(cx, || String::new());
     let password = use_state(cx, || String::new());
@@ -25,13 +25,13 @@ pub fn LogIn(cx: Scope) -> Element {
         }
         let form = serialize_login(username.to_string(), password.to_string());
 
-        let url = format!("{BASE_API_URL}/login");
+        let url = format!("{BASE_API_URL}/adduser");
         Runtime::new().unwrap().block_on(async {
             let res = reqwest::Client::new().post(&url).form(&form).send().await;
             if res.is_ok() {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
-                if value["status_code"].as_u16().unwrap() == 202 {
+                if value["status_code"].as_u16().unwrap() == 201 {
                     let mut u = user.write();
                     *u = Some(User {
                         id: value["user_id"].as_i64().unwrap(),
@@ -51,9 +51,9 @@ pub fn LogIn(cx: Scope) -> Element {
         }
         div{
             id:"content",
-            h1{"Login"}
+            h1{"Create User"}
             form {
-                id: "login",
+                id: "createuser",
                 prevent_default: "onsubmit",
                 onsubmit: send,
                 input {
@@ -81,8 +81,8 @@ pub fn LogIn(cx: Scope) -> Element {
                 }
             }
             Link{
-                to: Route::CreateUser{},
-                "create user"
+                to: Route::LogIn{},
+                "Login"
             }
         }
     }

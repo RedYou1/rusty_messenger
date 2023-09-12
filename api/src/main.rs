@@ -27,12 +27,18 @@ type Convs = RwLock<HashMap<i64, Sender<String>>>;
 #[post("/adduser", data = "<form>")]
 fn post_adduser(form: Form<FormAddUser>) -> String {
     let conn = establish_connection().unwrap();
-    let user = add_user(&conn, form.into_inner()).unwrap();
-
-    return format!(
-        "{{ \"id\": {}, \"username\": \"{}\" }}",
-        user.id, user.username
-    );
+    let user = add_user(&conn, form.into_inner());
+    match user {
+        Ok(user) => format!(
+            "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"username\": \"{}\", \"api_key\": \"{}\" }}",
+            Status::Created.code, user.id, user.username, user.api_key
+        ),
+        Err(e) => format!(
+            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+            Status::Unauthorized.code,
+            e
+        ),
+    }
 }
 
 #[post("/login", data = "<form>")]

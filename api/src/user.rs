@@ -1,4 +1,6 @@
+use chrono::Utc;
 use pwhash::bcrypt;
+use rand::Rng;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Connection, Result, Row};
 
@@ -38,12 +40,19 @@ pub struct FormAddUser {
 }
 
 pub fn add_user<'a>(conn: &'a Connection, user: FormAddUser) -> Result<UserPass> {
+    let napi = bcrypt::hash(format!(
+        "{}+{}",
+        Utc::now().timestamp(),
+        rand::thread_rng().gen::<u64>()
+    ))
+    .unwrap();
+
     conn.execute(
         "INSERT INTO user (username, password, api_key) VALUES (?1,?2,?3)",
         (
             user.username.as_str(),
             bcrypt::hash(user.password.as_str()).unwrap(),
-            "",
+            napi.as_str(),
         ),
     )?;
 
@@ -51,7 +60,7 @@ pub fn add_user<'a>(conn: &'a Connection, user: FormAddUser) -> Result<UserPass>
         id: conn.last_insert_rowid(),
         username: user.username,
         pass: user.password,
-        api_key: String::new(),
+        api_key: napi,
     });
 }
 

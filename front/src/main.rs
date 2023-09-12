@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 mod conv;
+mod create_user;
 mod event_source;
 mod home;
 mod login;
@@ -18,6 +19,7 @@ use std::sync::{Arc, Mutex};
 use structs::Message;
 
 use crate::conv::Conv;
+use crate::create_user::CreateUser;
 use crate::event_source::{event_receiver, EventReceiver, SourceState};
 use crate::home::Home;
 use crate::login::LogIn;
@@ -30,6 +32,8 @@ pub enum Route {
     Home {},
     #[route("/login")]
     LogIn {},
+    #[route("/create-user")]
+    CreateUser {},
     #[route("/:room_id/:room_name")]
     Conv { room_id: i64, room_name:String }
 }
