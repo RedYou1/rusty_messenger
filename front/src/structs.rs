@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use dioxus::prelude::*;
 
 #[derive(PartialEq)]
@@ -22,9 +22,7 @@ pub struct Message {
 
 pub fn deserialize(date: i64, room_id: i64, user_id: i64, text: &str) -> Message {
     Message {
-        date: NaiveDateTime::from_timestamp_opt(date, 0)
-            .map(|odt| odt.and_utc())
-            .unwrap(),
+        date: Utc.timestamp_opt(date, 0).unwrap(),
         room_id: room_id,
         user_id: user_id,
         text: text.to_string(),

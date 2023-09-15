@@ -50,10 +50,10 @@ pub fn CreateUser(cx: Scope) -> Element {
             None => render!{div{}}
         }
         div{
-            id:"content",
+            id:"createuser",
             h1{"Create User"}
             form {
-                id: "createuser",
+                id: "create-user",
                 prevent_default: "onsubmit",
                 onsubmit: send,
                 input {

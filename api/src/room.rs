@@ -1,6 +1,8 @@
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Connection, Result, Row};
 
+use crate::user::user_select_username;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
 pub struct Room {
@@ -27,6 +29,15 @@ pub struct FormAddRoom {
     pub name: String,
 }
 
+#[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct FormAddUserRoom {
+    pub user_id: i64,
+    pub api_key: String,
+    pub user_other: String,
+    pub room_id: i64,
+}
+
 pub fn add_room<'a>(conn: &'a Connection, room: FormAddRoom) -> Result<Room> {
     conn.execute("INSERT INTO room (name) VALUES (?1)", (room.name.as_str(),))?;
 
@@ -41,6 +52,25 @@ pub fn add_room<'a>(conn: &'a Connection, room: FormAddRoom) -> Result<Room> {
     )?;
 
     return Ok(nroom);
+}
+
+pub fn add_user_room<'a>(
+    conn: &'a Connection,
+    form: FormAddUserRoom,
+) -> Result<(Room, i64), String> {
+    let room = room_select_id(conn, form.room_id)?;
+    let other = user_select_username(conn, form.user_other.as_str())?;
+
+    let stmt = conn.execute(
+        "INSERT INTO user_room (user_id, room_id) VALUES (?1, ?2)",
+        (other.id, form.user_id),
+    );
+
+    if stmt.is_err() {
+        return Err(format!("cant prepare"));
+    }
+
+    return Ok((room, other.id));
 }
 
 pub fn room_select_id<'a>(conn: &'a Connection, room_id: i64) -> Result<Room, String> {
@@ -72,6 +102,13 @@ pub fn room_select_id<'a>(conn: &'a Connection, room_id: i64) -> Result<Room, St
         return Err(format!("no room with the id {}", room_id));
     }
     return Ok(obduser.unwrap());
+}
+
+pub fn select_users_room<'a>(conn: &'a Connection, room_id: i64) -> Result<Vec<i64>> {
+    let mut stmt = conn.prepare("SELECT user_id FROM user_room WHERE room_id = ?1")?;
+    let rows = stmt.query([room_id])?;
+    let m = rows.mapped(|row| Ok(row.get::<usize, i64>(0)?));
+    return m.collect();
 }
 
 fn map_room(row: &Row) -> Result<Room> {

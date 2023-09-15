@@ -18,7 +18,7 @@ use rocket::tokio::select;
 use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
 use rocket::tokio::sync::RwLock;
 use rocket::{Shutdown, State};
-use room::{add_room, FormAddRoom};
+use room::{add_room, add_user_room, select_users_room, FormAddRoom, FormAddUserRoom};
 use std::collections::HashMap;
 use user::{add_user, logout, user_select_id, FormAddUser};
 
@@ -33,6 +33,25 @@ fn post_adduser(form: Form<FormAddUser>) -> String {
             "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"username\": \"{}\", \"api_key\": \"{}\" }}",
             Status::Created.code, user.id, user.username, user.api_key
         ),
+        Err(e) => format!(
+            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+            Status::Unauthorized.code,
+            e
+        ),
+    }
+}
+
+#[get("/user/<user_id>")]
+fn get_user(user_id: i64) -> String {
+    let conn = establish_connection().unwrap();
+    let user = user_select_id(&conn, user_id);
+    match user {
+        Ok(user) => {
+            format!(
+            "{{ \"status_code\": {}, \"status\": \"Ok\", \"user_id\": {}, \"username\": \"{}\" }}",
+            Status::Ok.code, user.id, user.username
+        )
+        }
         Err(e) => format!(
             "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
             Status::Unauthorized.code,
@@ -173,6 +192,7 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
     let conn = establish_connection().unwrap();
 
     let inform = form.into_inner();
+    let room_id = inform.room_id;
     let user = validate_user_key(&conn, inform.user_id, inform.api_key.as_str());
     if user.is_err() {
         return format!(
@@ -183,13 +203,65 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
     }
 
     let message = add_message(&conn, inform).unwrap();
+    let smessage = message.serialize();
 
     let lock = convs.read().await;
-    let conv = lock.get(&message.user_id);
+
+    let users = select_users_room(&conn, room_id);
+    if users.is_err() {
+        return format!(
+            "{{ \"status_code\": {}, \"status\": \"InternalServerError\", \"reason\": \"{}\" }}",
+            Status::InternalServerError.code,
+            users.unwrap_err()
+        );
+    }
+
+    for user_id in users.unwrap() {
+        let conv = lock.get(&user_id);
+        if conv.is_some() {
+            // A send 'fails' if there are no active subscribers. That's okay.
+            let _ = conv.unwrap().send(smessage.to_string());
+        }
+    }
+
+    return format!(
+        "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
+        Status::Created.code,
+        user.unwrap()
+    );
+}
+
+#[post("/invite", data = "<form>")]
+async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> String {
+    let conn = establish_connection().unwrap();
+
+    let inform = form.into_inner();
+    let user = validate_user_key(&conn, inform.user_id, inform.api_key.as_str());
+    if user.is_err() {
+        return format!(
+            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+            Status::Unauthorized.code,
+            user.unwrap_err()
+        );
+    }
+
+    let room = add_user_room(&conn, inform);
+
+    if room.is_err() {
+        return format!(
+            "{{ \"status_code\": {}, \"status\": \"BadRequest\", \"reason\": \"{}\" }}",
+            Status::BadRequest.code,
+            room.unwrap_err()
+        );
+    }
+    let room = room.unwrap();
+
+    let lock = convs.read().await;
+    let conv = lock.get(&room.1);
 
     if conv.is_some() {
         // A send 'fails' if there are no active subscribers. That's okay.
-        let _ = conv.unwrap().send(message.serialize());
+        let _ = conv.unwrap().send(room.0.serialize());
     }
     return format!(
         "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
@@ -213,8 +285,10 @@ fn rocket() -> _ {
                 post_adduser,
                 post_login,
                 get_events,
+                get_user,
                 post_message,
-                post_addroom
+                post_addroom,
+                post_invite
             ],
         )
         .mount("/", FileServer::from(relative!("static")))

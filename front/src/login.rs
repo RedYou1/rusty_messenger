@@ -50,10 +50,10 @@ pub fn LogIn(cx: Scope) -> Element {
             None => render!{div{}}
         }
         div{
-            id:"content",
+            id:"login",
             h1{"Login"}
             form {
-                id: "login",
+                id: "login-form",
                 prevent_default: "onsubmit",
                 onsubmit: send,
                 input {

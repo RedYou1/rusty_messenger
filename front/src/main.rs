@@ -42,6 +42,7 @@ pub type AccountManager = Option<User>;
 
 type Messages = Arc<Mutex<Box<HashMap<i64, Vec<Message>>>>>;
 type Rooms = Arc<Mutex<Box<Vec<Room>>>>;
+type Users = Arc<Mutex<HashMap<i64, String>>>;
 
 fn page(cx: Scope) -> Element {
     let _ = use_shared_state_provider::<Messages>(cx, || {
@@ -49,6 +50,9 @@ fn page(cx: Scope) -> Element {
     });
     let _ = use_shared_state_provider::<Rooms>(cx, || {
         Arc::new(Mutex::new(Box::new(Vec::<Room>::new())))
+    });
+    let _ = use_shared_state_provider::<Users>(cx, || {
+        Arc::new(Mutex::new(HashMap::<i64, String>::new()))
     });
     let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Disconnected);
     let _ = use_shared_state_provider::<AccountManager>(cx, || None);

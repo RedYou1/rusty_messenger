@@ -56,7 +56,7 @@ pub fn add_message<'a, 'b>(conn: &'a Connection, message: FormMessage) -> Result
 
 pub fn load_messages(conn: &Connection, user_id: i64) -> Result<Vec<Message>> {
     let mut stmt =
-        conn.prepare("SELECT date, room_id, user_id, text FROM message WHERE user_id = ?1")?; //TODO get by rooms
+        conn.prepare("SELECT message.date, message.room_id, message.user_id, message.text FROM user_room INNER JOIN message ON message.room_id = user_room.room_id WHERE user_room.user_id = ?1 ORDER BY message.date")?;
     let rows = stmt.query_map([user_id], map_message)?;
 
     let mut messages = Vec::new();
