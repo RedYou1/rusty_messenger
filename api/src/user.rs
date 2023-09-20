@@ -69,68 +69,50 @@ pub fn logout<'a>(conn: &'a Connection, user_id: i64) -> Result<usize> {
 }
 
 pub fn user_select_id<'a>(conn: &'a Connection, user_id: i64) -> Result<UserPass, String> {
-    let stmt = conn.prepare("SELECT id, username, password, api_key FROM user WHERE id = ?1");
+    let mut stmt = conn
+        .prepare("SELECT id, username, password, api_key FROM user WHERE id = ?1")
+        .map_err(|_| format!("cant prepare"))?;
 
-    if stmt.is_err() {
-        return Err(format!("cant prepare"));
-    }
-
-    let mut stmtmut = stmt.unwrap();
-
-    let rows = stmtmut.query_map([user_id], map_user_pass);
-
-    if rows.is_err() {
-        return Err(format!("cant querry"));
-    }
+    let rows = stmt
+        .query_map([user_id], map_user_pass)
+        .map_err(|_| format!("cant querry"))?;
 
     let mut obduser = None;
-    for usr in rows.unwrap() {
+    for usr in rows {
         if obduser.is_some() {
             return Err(format!("multiple users with the id {}", user_id));
         }
-        if usr.is_err() {
-            return Err(format!("bad user {}", usr.unwrap_err().to_string()));
-        }
-        obduser = Some(usr.unwrap());
+        obduser = Some(usr.map_err(|usr| format!("bad user {}", usr.to_string()))?);
     }
-    if obduser.is_none() {
-        return Err(format!("no user with the id {}", user_id));
+    match obduser {
+        Some(obduser) => Ok(obduser),
+        None => Err(format!("no user with the id {}", user_id)),
     }
-    return Ok(obduser.unwrap());
 }
 
 pub fn user_select_username<'a, 'b>(
     conn: &'a Connection,
     username: &'b str,
 ) -> Result<UserPass, String> {
-    let stmt = conn.prepare("SELECT id, username, password, api_key FROM user WHERE username = ?1");
+    let mut stmt = conn
+        .prepare("SELECT id, username, password, api_key FROM user WHERE username = ?1")
+        .map_err(|_| format!("cant prepare"))?;
 
-    if stmt.is_err() {
-        return Err(format!("cant prepare"));
-    }
-
-    let mut stmtmut = stmt.unwrap();
-
-    let rows = stmtmut.query_map([username], map_user_pass);
-
-    if rows.is_err() {
-        return Err(format!("cant querry"));
-    }
+    let rows = stmt
+        .query_map([username], map_user_pass)
+        .map_err(|_| format!("cant querry"))?;
 
     let mut obduser = None;
-    for usr in rows.unwrap() {
+    for usr in rows {
         if obduser.is_some() {
             return Err(format!("multiple users with the username {}", username));
         }
-        if usr.is_err() {
-            return Err(format!("bad user {}", usr.unwrap_err().to_string()));
-        }
-        obduser = Some(usr.unwrap());
+        obduser = Some(usr.map_err(|usr| format!("bad user {}", usr.to_string()))?);
     }
-    if obduser.is_none() {
-        return Err(format!("no user with the username {}", username));
+    match obduser {
+        Some(obduser) => Ok(obduser),
+        None => Err(format!("no user with the username {}", username)),
     }
-    return Ok(obduser.unwrap());
 }
 
 pub fn user_update_api_key<'a, 'b>(

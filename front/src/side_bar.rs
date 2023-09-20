@@ -2,10 +2,11 @@ use std::collections::HashMap;
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use tokio::runtime::Runtime;
 
 use crate::{
-    event_source::SourceState, room::OpRoomId, AccountManager, Rooms, Route, BASE_API_URL,
+    event_source::SourceState,
+    room::{OpRoomId, Room},
+    AccountManager, Rooms, Route, BASE_API_URL,
 };
 
 pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
@@ -20,7 +21,9 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
         SourceState::Connected => "connected",
     };
 
-    let send = move |_| {
+    let send = move |event: Event<FormData>| {
+        event.stop_propagation();
+
         if name.is_empty() {
             println!("Empty message");
             return;
@@ -28,7 +31,8 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
         let form: HashMap<&str, String>;
         {
             let r = user.read();
-            let t = r.as_ref().unwrap();
+            let t = r.lock().unwrap();
+            let t = t.as_ref().unwrap();
             form = HashMap::<&'static str, String>::from([
                 ("user_id", t.id.to_string()),
                 ("api_key", t.api_key.to_string()),
@@ -36,14 +40,17 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
             ]);
         }
 
+        let user = user.to_owned();
+        let name = name.to_owned();
         let url = format!("{BASE_API_URL}/room");
-        Runtime::new().unwrap().block_on(async {
+        cx.spawn(async move {
             let res = reqwest::Client::new().post(&url).form(&form).send().await;
             if res.is_ok() {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let mut u = user.write();
+                    let u = user.write();
+                    let mut u = u.lock().unwrap();
                     let l = u.as_mut().unwrap();
                     l.api_key = value["api_key"].as_str().unwrap().to_string();
 
@@ -51,12 +58,11 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
                 }
             }
         });
-        return ();
     };
 
     let m = rooms.read();
-    let m2 = m.lock().unwrap();
-    let rooms = m2.as_ref();
+    let rooms = m.lock().unwrap();
+    let rooms: &Vec<Room> = rooms.as_ref();
 
     let class_room = "room";
     let class_room_active = "room active";

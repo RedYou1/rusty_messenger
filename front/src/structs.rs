@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use chrono::{DateTime, TimeZone, Utc};
 use dioxus::prelude::*;
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct User {
     pub id: i64,
     pub username: String,

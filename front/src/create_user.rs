@@ -1,7 +1,6 @@
 use dioxus::prelude::Scope;
 use dioxus::prelude::*;
 use dioxus_router::prelude::Link;
-use tokio::runtime::Runtime;
 
 use crate::side_bar::SideBar;
 use crate::structs::{serialize_login, User};
@@ -14,7 +13,9 @@ pub fn CreateUser(cx: Scope) -> Element {
     let username = use_state(cx, || String::new());
     let password = use_state(cx, || String::new());
 
-    let send = move |_| {
+    let send = move |event: Event<FormData>| {
+        event.stop_propagation();
+
         if username.is_empty() {
             println!("Empty username");
             return;
@@ -23,16 +24,20 @@ pub fn CreateUser(cx: Scope) -> Element {
             println!("Empty password");
             return;
         }
+
         let form = serialize_login(username.to_string(), password.to_string());
 
+        let user = user.to_owned();
+        let username = username.to_owned();
         let url = format!("{BASE_API_URL}/adduser");
-        Runtime::new().unwrap().block_on(async {
+        cx.spawn(async move {
             let res = reqwest::Client::new().post(&url).form(&form).send().await;
             if res.is_ok() {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let mut u = user.write();
+                    let u = user.write();
+                    let mut u = u.lock().unwrap();
                     *u = Some(User {
                         id: value["user_id"].as_i64().unwrap(),
                         username: username.to_string(),
@@ -41,11 +46,10 @@ pub fn CreateUser(cx: Scope) -> Element {
                 }
             }
         });
-        return ();
     };
 
     render! {
-        match user.read().as_ref() {
+        match user.read().lock().unwrap().as_ref() {
             Some(_) => render!{SideBar{}},
             None => render!{div{}}
         }

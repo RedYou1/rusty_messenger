@@ -61,12 +61,10 @@ pub fn add_user_room<'a>(
     let room = room_select_id(conn, form.room_id)?;
     let other = user_select_username(conn, form.user_other.as_str())?;
 
-    let stmt = conn.execute(
+    if let Err(_) = conn.execute(
         "INSERT INTO user_room (user_id, room_id) VALUES (?1, ?2)",
         (other.id, form.user_id),
-    );
-
-    if stmt.is_err() {
+    ) {
         return Err(format!("cant prepare"));
     }
 
@@ -74,34 +72,25 @@ pub fn add_user_room<'a>(
 }
 
 pub fn room_select_id<'a>(conn: &'a Connection, room_id: i64) -> Result<Room, String> {
-    let stmt = conn.prepare("SELECT id, name FROM room WHERE id = ?1");
+    let mut stmt = conn
+        .prepare("SELECT id, name FROM room WHERE id = ?1")
+        .map_err(|_| format!("cant prepare"))?;
 
-    if stmt.is_err() {
-        return Err(format!("cant prepare"));
-    }
-
-    let mut stmtmut = stmt.unwrap();
-
-    let rows = stmtmut.query_map([room_id], map_room);
-
-    if rows.is_err() {
-        return Err(format!("cant querry"));
-    }
+    let rows = stmt
+        .query_map([room_id], map_room)
+        .map_err(|_| format!("cant querry"))?;
 
     let mut obduser = None;
-    for usr in rows.unwrap() {
+    for usr in rows {
         if obduser.is_some() {
             return Err(format!("multiple rooms with the id {}", room_id));
         }
-        if usr.is_err() {
-            return Err(format!("bad room {}", usr.unwrap_err().to_string()));
-        }
-        obduser = Some(usr.unwrap());
+        obduser = Some(usr.map_err(|usr| format!("bad room {}", usr.to_string()))?);
     }
-    if obduser.is_none() {
-        return Err(format!("no room with the id {}", room_id));
+    match obduser {
+        Some(obduser) => Ok(obduser),
+        None => Err(format!("no room with the id {}", room_id)),
     }
-    return Ok(obduser.unwrap());
 }
 
 pub fn select_users_room<'a>(conn: &'a Connection, room_id: i64) -> Result<Vec<i64>> {

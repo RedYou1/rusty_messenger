@@ -1,7 +1,6 @@
 use chrono::Local;
 use dioxus::prelude::*;
 use std::collections::HashMap;
-use tokio::runtime::Runtime;
 
 use crate::side_bar::SideBar;
 use crate::structs::{serialize_message, Message};
@@ -17,41 +16,50 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
     let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
 
-    let send_message = move |_| {
-        if message.is_empty() {
+    let send_message = move |event: Event<FormData>| {
+        event.stop_propagation();
+
+        let user_clone = user.to_owned();
+        let message_clone = message.to_owned();
+        if message_clone.is_empty() {
             println!("Empty message");
-            return;
+            return ();
         }
         let form: HashMap<&str, String>;
         {
-            let r = user.read();
-            let t = r.as_ref().unwrap();
+            let r = user_clone.read();
+            let t = r.lock().unwrap();
+            let t = t.as_ref().unwrap();
             form = serialize_message(
                 room_id.clone(),
                 t.id,
                 t.api_key.to_string(),
-                message.to_string(),
+                message_clone.to_string(),
             );
         }
 
         let url = format!("{BASE_API_URL}/message");
-        Runtime::new().unwrap().block_on(async {
+        cx.spawn(async move {
             let res = reqwest::Client::new().post(&url).form(&form).send().await;
             if res.is_ok() {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let mut u = user.write();
-                    let l = u.as_mut().unwrap();
+                    let u = user_clone.write();
+                    let mut l = u.lock().unwrap();
+                    let l = l.as_mut().unwrap();
                     l.api_key = value["api_key"].as_str().unwrap().to_string();
-                    message.set(String::new());
+                    message_clone.set(String::new());
                 }
             }
         });
-        return ();
     };
 
-    let send_invite = move |_| {
+    let send_invite = move |event: Event<FormData>| {
+        event.stop_propagation();
+
+        let user = user.to_owned();
+        let username = username.to_owned();
         if username.is_empty() {
             println!("Empty username");
             return;
@@ -59,7 +67,8 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
         let form: HashMap<&str, String>;
         {
             let r = user.read();
-            let t = r.as_ref().unwrap();
+            let t = r.lock().unwrap();
+            let t = t.as_ref().unwrap();
             form = HashMap::<&'static str, String>::from([
                 ("user_id", t.id.to_string()),
                 ("api_key", t.api_key.to_string()),
@@ -69,20 +78,20 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
         }
 
         let url = format!("{BASE_API_URL}/invite");
-        Runtime::new().unwrap().block_on(async {
+        cx.spawn(async move {
             let res = reqwest::Client::new().post(&url).form(&form).send().await;
             if res.is_ok() {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let mut u = user.write();
-                    let l = u.as_mut().unwrap();
+                    let u = user.write();
+                    let mut l = u.lock().unwrap();
+                    let l = l.as_mut().unwrap();
                     l.api_key = value["api_key"].as_str().unwrap().to_string();
                     username.set(String::new());
                 }
             }
         });
-        return ();
     };
 
     let m = messages.read();
@@ -173,19 +182,20 @@ fn message_element(cx: Scope<Message>) -> Element {
     let username = match get_user(users, cx.props.user_id) {
         Some(username) => username,
         None => {
-            let url = format!("{BASE_API_URL}/user/{}", cx.props.user_id);
-            Runtime::new().unwrap().block_on(async {
-                let res = reqwest::Client::new().get(&url).send().await;
+            let user_id = cx.props.user_id;
+            let users = users.to_owned();
+            cx.spawn(async move {
+                let res = reqwest::Client::new()
+                    .get(format!("{BASE_API_URL}/user/{}", user_id))
+                    .send()
+                    .await;
                 if res.is_ok() {
                     let r = res.unwrap().text().await.unwrap();
                     let value = json::parse(r.as_str()).unwrap();
                     if value["status_code"].as_u16().unwrap() == 200 {
                         let u = users.write();
                         let mut u = u.lock().unwrap();
-                        u.insert(
-                            cx.props.user_id,
-                            value["username"].as_str().unwrap().to_string(),
-                        );
+                        u.insert(user_id, value["username"].as_str().unwrap().to_string());
                     }
                 }
             });
@@ -195,7 +205,7 @@ fn message_element(cx: Scope<Message>) -> Element {
 
     return render! {
         div{
-            class: match user.read().as_ref() {
+            class: match user.read().lock().unwrap().as_ref() {
                 Some(user) => if user.id == cx.props.user_id { MESSAGE_ME } else { MESSAGE_OTHER },
                 None => MESSAGE_OTHER
             },

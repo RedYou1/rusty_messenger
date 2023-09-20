@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+mod async_state;
 mod conv;
 mod create_user;
 mod event_source;
@@ -18,9 +19,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use structs::Message;
 
+use crate::async_state::AsyncStateSetter;
 use crate::conv::Conv;
 use crate::create_user::CreateUser;
-use crate::event_source::{event_receiver, EventReceiver, SourceState};
+use crate::event_source::SourceState;
 use crate::home::Home;
 use crate::login::LogIn;
 use crate::structs::User;
@@ -35,57 +37,56 @@ pub enum Route {
     #[route("/create-user")]
     CreateUser {},
     #[route("/:room_id/:room_name")]
-    Conv { room_id: i64, room_name:String }
+    Conv { room_id: i64, room_name:String },
+    #[route("/:..route")]
+    PageNotFound { route: Vec<String> },
 }
 
-pub type AccountManager = Option<User>;
+pub type AccountManager = Arc<Mutex<Option<User>>>;
 
-type Messages = Arc<Mutex<Box<HashMap<i64, Vec<Message>>>>>;
-type Rooms = Arc<Mutex<Box<Vec<Room>>>>;
+type Messages = Arc<Mutex<HashMap<i64, Vec<Message>>>>;
+type Rooms = Arc<Mutex<Vec<Room>>>;
 type Users = Arc<Mutex<HashMap<i64, String>>>;
 
 fn page(cx: Scope) -> Element {
     let _ = use_shared_state_provider::<Messages>(cx, || {
-        Arc::new(Mutex::new(Box::new(HashMap::<i64, Vec<Message>>::new())))
+        Arc::new(Mutex::new(HashMap::<i64, Vec<Message>>::new()))
     });
-    let _ = use_shared_state_provider::<Rooms>(cx, || {
-        Arc::new(Mutex::new(Box::new(Vec::<Room>::new())))
-    });
+    let _ = use_shared_state_provider::<Rooms>(cx, || Arc::new(Mutex::new(Vec::<Room>::new())));
     let _ = use_shared_state_provider::<Users>(cx, || {
         Arc::new(Mutex::new(HashMap::<i64, String>::new()))
     });
     let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Disconnected);
-    let _ = use_shared_state_provider::<AccountManager>(cx, || None);
+    let _ = use_shared_state_provider::<AccountManager>(cx, || Arc::new(Mutex::new(None)));
 
     let messages = use_shared_state::<Messages>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
 
-    let message_sender: EventReceiver<Message> =
-        event_receiver(cx, messages, |messages, message: Message| {
-            let m = messages.write();
-            let mut messages = m.lock().unwrap();
+    let message_sender = AsyncStateSetter::<Message>::new(cx, messages, |messages, message| {
+        let m = messages.write();
+        let mut messages = m.lock().unwrap();
 
-            if !messages.contains_key(&message.room_id) {
-                messages.insert(message.room_id, Vec::new());
-            }
-            let vec = messages.get_mut(&message.room_id).unwrap();
-            vec.push(message);
-        });
-
-    let room_sender: EventReceiver<Room> = event_receiver(cx, rooms, |rooms, room: Room| {
-        rooms.write().lock().unwrap().push(room);
+        if !messages.contains_key(&message.room_id) {
+            messages.insert(message.room_id, Vec::new());
+        }
+        let vec = messages.get_mut(&message.room_id).unwrap();
+        vec.push(message);
     });
 
-    let source_state_sender: EventReceiver<SourceState> =
-        event_receiver(cx, source_state, |source_state, state: SourceState| {
-            *source_state.write() = state;
+    let room_sender = AsyncStateSetter::<Room>::new(cx, rooms, |rooms, room| {
+        rooms.write().lock().unwrap().push(room)
+    });
+
+    let source_state_sender =
+        AsyncStateSetter::<SourceState>::new(cx, source_state, |source_state, state| {
+            *source_state.write() = state
         });
 
     let r = user.read();
     if *source_state.read() == SourceState::Disconnected {
-        if let Some(a) = r.as_ref() {
+        if let Some(a) = r.lock().unwrap().as_ref() {
             let _ = event_source::MyEventSource::new(
                 a.id,
                 a.api_key.as_str(),
@@ -97,13 +98,18 @@ fn page(cx: Scope) -> Element {
     }
 
     render! {
-        link { rel: "stylesheet", href: "../dist/reset.css" }
-        link { rel: "stylesheet", href: "../dist/style.css" }
         Router::<Route> {}
+    }
+}
+
+#[inline_props]
+fn PageNotFound(cx: Scope, route: Vec<String>) -> Element {
+    render! {
+        h1{ "404. Route: {route:?}, Not Found. :(" }
     }
 }
 
 fn main() {
     // launch the web app
-    dioxus_desktop::launch(page);
+    dioxus_web::launch(page);
 }

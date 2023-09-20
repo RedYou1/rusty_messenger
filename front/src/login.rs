@@ -1,8 +1,7 @@
-use dioxus::prelude::Scope;
 use dioxus::prelude::*;
 use dioxus_router::prelude::Link;
-use tokio::runtime::Runtime;
 
+use crate::async_state::AsyncStateSetter;
 use crate::side_bar::SideBar;
 use crate::structs::{serialize_login, User};
 use crate::BASE_API_URL;
@@ -14,7 +13,13 @@ pub fn LogIn(cx: Scope) -> Element {
     let username = use_state(cx, || String::new());
     let password = use_state(cx, || String::new());
 
-    let send = move |_| {
+    let userSetter = AsyncStateSetter::<Option<User>>::new(cx, user, |account_manager, user| {
+        *account_manager.write().lock().unwrap() = user
+    });
+
+    let send = move |event: Event<MouseData>| {
+        event.stop_propagation();
+
         if username.is_empty() {
             println!("Empty username");
             return;
@@ -26,26 +31,25 @@ pub fn LogIn(cx: Scope) -> Element {
         let form = serialize_login(username.to_string(), password.to_string());
 
         let url = format!("{BASE_API_URL}/login");
-        Runtime::new().unwrap().block_on(async {
-            let res = reqwest::Client::new().post(&url).form(&form).send().await;
-            if res.is_ok() {
-                let r = res.unwrap().text().await.unwrap();
+        let username = username.to_string();
+        let t = userSetter.clone();
+        cx.spawn(async move {
+            if let Ok(res) = reqwest::Client::new().post(url).form(&form).send().await {
+                let r = res.text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 202 {
-                    let mut u = user.write();
-                    *u = Some(User {
+                    t.set_state(Some(User {
                         id: value["user_id"].as_i64().unwrap(),
-                        username: username.to_string(),
+                        username: username,
                         api_key: value["api_key"].as_str().unwrap().to_string(),
-                    });
+                    }))
                 }
             }
         });
-        return ();
     };
 
     render! {
-        match user.read().as_ref() {
+        match user.read().lock().unwrap().as_ref() {
             Some(_) => render!{SideBar{}},
             None => render!{div{}}
         }
@@ -54,8 +58,6 @@ pub fn LogIn(cx: Scope) -> Element {
             h1{"Login"}
             form {
                 id: "login-form",
-                prevent_default: "onsubmit",
-                onsubmit: send,
                 input {
                     r#type: "text",
                     name: "username",
@@ -76,7 +78,8 @@ pub fn LogIn(cx: Scope) -> Element {
                 }
                 button {
                     id: "send",
-                    r#type: "submit",
+                    prevent_default: "onclick",
+                    onclick: send,
                     "Send"
                 }
             }

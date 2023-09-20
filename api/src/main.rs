@@ -64,24 +64,22 @@ fn get_user(user_id: i64) -> String {
 fn post_login(form: Form<FormAddUser>) -> String {
     let conn = establish_connection().unwrap();
     let user = form.into_inner();
-    let r = validate_login(&conn, user.username.as_str(), user.password.as_str());
 
-    if r.is_err() {
-        return format!(
-            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-            Status::Unauthorized.code,
-            r.unwrap_err()
-        );
+    match validate_login(&conn, user.username.as_str(), user.password.as_str()){
+        Ok((id, api_key))=>
+            format!(
+                "{{ \"status_code\": {}, \"status\": \"Accepted\", \"user_id\": {}, \"api_key\": \"{}\" }}",
+                Status::Accepted.code,
+                id,
+                api_key
+            ),
+        Err(r)=>
+            format!(
+                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+                Status::Unauthorized.code,
+                r
+            )
     }
-
-    let (id, api_key) = r.unwrap();
-
-    return format!(
-        "{{ \"status_code\": {}, \"status\": \"Accepted\", \"user_id\": {}, \"api_key\": \"{}\" }}",
-        Status::Accepted.code,
-        id,
-        api_key
-    );
 }
 
 #[post("/room", data = "<form>")]
@@ -102,12 +100,11 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
     let room = add_room(&conn, inform).unwrap();
 
     let lock = convs.read().await;
-    let conv = lock.get(&user_id);
-
-    if conv.is_some() {
+    if let Some(conv) = lock.get(&user_id) {
         // A send 'fails' if there are no active subscribers. That's okay.
-        let _ = conv.unwrap().send(room.serialize());
+        let _ = conv.send(room.serialize());
     }
+
     return format!(
         "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
         Status::Created.code,
@@ -143,9 +140,8 @@ async fn get_events(
         let mut trx = None;
         {
             let lock = convs.read().await;
-            let conv = lock.get(&user_id);
-            if conv.is_some() {
-                trx = Some(conv.unwrap().subscribe());
+            if let Some(conv) = lock.get(&user_id) {
+                trx = Some(conv.subscribe());
             }
         }
         match trx {
@@ -217,10 +213,9 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
     }
 
     for user_id in users.unwrap() {
-        let conv = lock.get(&user_id);
-        if conv.is_some() {
+        if let Some(conv) = lock.get(&user_id) {
             // A send 'fails' if there are no active subscribers. That's okay.
-            let _ = conv.unwrap().send(smessage.to_string());
+            let _ = conv.send(smessage.to_string());
         }
     }
 
@@ -257,12 +252,11 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
     let room = room.unwrap();
 
     let lock = convs.read().await;
-    let conv = lock.get(&room.1);
-
-    if conv.is_some() {
+    if let Some(conv) = lock.get(&room.1) {
         // A send 'fails' if there are no active subscribers. That's okay.
-        let _ = conv.unwrap().send(room.0.serialize());
+        let _ = conv.send(room.0.serialize());
     }
+
     return format!(
         "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
         Status::Created.code,
