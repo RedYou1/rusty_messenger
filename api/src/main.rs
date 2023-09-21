@@ -255,6 +255,10 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
     if let Some(conv) = lock.get(&room.1) {
         // A send 'fails' if there are no active subscribers. That's okay.
         let _ = conv.send(room.0.serialize());
+        let messages = load_messages(&conn, room.1).unwrap();
+        for message in messages{
+            let _ = conv.send(message.serialize());
+        }
     }
 
     return format!(

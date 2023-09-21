@@ -10,9 +10,10 @@ use crate::{
 
 #[derive(PartialEq)]
 pub enum SourceState {
-    Disconnected = 0,
-    ReConnecting = 1,
-    Connected = 2,
+    Error = 0b000,
+    Disconnected = 0b001,
+    ReConnecting = 0b010,
+    Connected = 0b100,
 }
 
 pub struct MyEventSource {
@@ -23,7 +24,7 @@ pub struct MyEventSource {
 }
 
 impl MyEventSource {
-    pub fn close(&self){
+    pub fn close(&self) {
         self.source.close();
     }
 

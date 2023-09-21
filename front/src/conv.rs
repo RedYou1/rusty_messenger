@@ -2,23 +2,26 @@ use chrono::Local;
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
+use crate::async_state::AsyncStateSetter;
 use crate::side_bar::SideBar;
 use crate::structs::{serialize_message, Message};
-use crate::Messages;
 use crate::BASE_API_URL;
 use crate::{AccountManager, Users};
+use crate::{Messages, Rooms};
 
 #[inline_props]
-pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
+pub fn Conv(cx: Scope, room_id: i64) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let messages = use_shared_state::<Messages>(cx).unwrap();
+    let rooms = use_shared_state::<Rooms>(cx).unwrap();
+
+    let room_name = rooms.read();
+    let room_name = room_name.0.get(room_id).unwrap();
 
     let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
 
-    let send_message = move |event: Event<FormData>| {
-        event.stop_propagation();
-
+    let send_message = move |_| {
         let user_clone = user.to_owned();
         let message_clone = message.to_owned();
         if message_clone.is_empty() {
@@ -27,11 +30,10 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
         }
         let form: HashMap<&str, String>;
         {
-            let r = user_clone.read();
-            let t = r.lock().unwrap();
+            let t = user_clone.read();
             let t = t.as_ref().unwrap();
             form = serialize_message(
-                room_id.clone(),
+                *room_id,
                 t.id,
                 t.api_key.to_string(),
                 message_clone.to_string(),
@@ -45,19 +47,15 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let u = user_clone.write_silent();
-                    let mut l = u.lock().unwrap();
-                    let l = l.as_mut().unwrap();
-                    l.api_key = value["api_key"].as_str().unwrap().to_string();
+                    user_clone.write_silent().as_mut().unwrap().api_key =
+                        value["api_key"].as_str().unwrap().to_string();
                     message_clone.set(String::new());
                 }
             }
         });
     };
 
-    let send_invite = move |event: Event<FormData>| {
-        event.stop_propagation();
-
+    let send_invite = move |_| {
         let user = user.to_owned();
         let username = username.to_owned();
         if username.is_empty() {
@@ -66,8 +64,7 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
         }
         let form: HashMap<&str, String>;
         {
-            let r = user.read();
-            let t = r.lock().unwrap();
+            let t = user.read();
             let t = t.as_ref().unwrap();
             form = HashMap::<&'static str, String>::from([
                 ("user_id", t.id.to_string()),
@@ -84,19 +81,16 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let u = user.write_silent();
-                    let mut l = u.lock().unwrap();
-                    let l = l.as_mut().unwrap();
-                    l.api_key = value["api_key"].as_str().unwrap().to_string();
+                    user.write_silent().as_mut().unwrap().api_key =
+                        value["api_key"].as_str().unwrap().to_string();
                     username.set(String::new());
                 }
             }
         });
     };
 
-    let m = messages.read();
-    let m2 = m.lock().unwrap();
-    let messages = m2.get(&room_id);
+    let messages = messages.read();
+    let messages = messages.get(room_id);
 
     render! {
         SideBar{id: *room_id}
@@ -105,8 +99,6 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
             span { room_name.as_str() }
             form {
                 id: "invite",
-                prevent_default: "onsubmit",
-                onsubmit: send_invite,
                 input {
                     r#type: "text",
                     name: "username",
@@ -119,7 +111,8 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
                 }
                 button {
                     id: "send",
-                    r#type: "submit",
+                    prevent_default: "onclick",
+                    onclick: send_invite,
                     "Send"
                 }
             }
@@ -143,8 +136,6 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
 
             form {
                 id: "new-message",
-                prevent_default: "onsubmit",
-                onsubmit: send_message,
                 input {
                     r#type: "text",
                     name: "message",
@@ -157,7 +148,8 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
                 }
                 button {
                     id: "send",
-                    r#type: "submit",
+                    prevent_default: "onclick",
+                    onclick: send_message,
                     "Send"
                 }
             }
@@ -169,21 +161,22 @@ const MESSAGE_ME: &'static str = "messageMe";
 const MESSAGE_OTHER: &'static str = "messageOther";
 
 fn get_user(users: &UseSharedState<Users>, user_id: i64) -> Option<String> {
-    let rusers = users.read();
-    let rusers = rusers.lock().unwrap();
-    let r = rusers.get(&user_id);
-    r.map(|u| u.to_string())
+    users.read().0.get(&user_id).map(|u| u.to_string())
 }
 
 fn message_element(cx: Scope<Message>) -> Element {
     let users = use_shared_state::<Users>(cx).unwrap();
     let user = use_shared_state::<AccountManager>(cx).unwrap();
 
-    let username = match get_user(users, cx.props.user_id) {
+    let user_id = cx.props.user_id;
+
+    let users_setter = AsyncStateSetter::<String>::new(cx, users, move |users, username| {
+        users.write().0.insert(user_id, username);
+    });
+
+    let username = match get_user(users, user_id) {
         Some(username) => username,
         None => {
-            let user_id = cx.props.user_id;
-            let users = users.to_owned();
             cx.spawn(async move {
                 let res = reqwest::Client::new()
                     .get(format!("{BASE_API_URL}/user/{}", user_id))
@@ -193,9 +186,7 @@ fn message_element(cx: Scope<Message>) -> Element {
                     let r = res.unwrap().text().await.unwrap();
                     let value = json::parse(r.as_str()).unwrap();
                     if value["status_code"].as_u16().unwrap() == 200 {
-                        let u = users.write();
-                        let mut u = u.lock().unwrap();
-                        u.insert(user_id, value["username"].as_str().unwrap().to_string());
+                        users_setter.set_state(value["username"].as_str().unwrap().to_string());
                     }
                 }
             });
@@ -205,7 +196,7 @@ fn message_element(cx: Scope<Message>) -> Element {
 
     return render! {
         div{
-            class: match user.read().lock().unwrap().as_ref() {
+            class: match user.read().as_ref() {
                 Some(user) => if user.id == cx.props.user_id { MESSAGE_ME } else { MESSAGE_OTHER },
                 None => MESSAGE_OTHER
             },

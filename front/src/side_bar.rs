@@ -4,9 +4,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 use crate::{
-    event_source::SourceState,
-    room::{OpRoomId, Room},
-    AccountManager, Rooms, Route, BASE_API_URL,
+    event_source::SourceState, room::OpRoomId, AccountManager, Rooms, Route, BASE_API_URL,
 };
 
 pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
@@ -16,22 +14,20 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
     let name = use_state(cx, || String::new());
 
     let state = match *source_state.read() {
+        SourceState::Error => "error",
         SourceState::Disconnected => "disconnected",
         SourceState::ReConnecting => "reconnecting",
         SourceState::Connected => "connected",
     };
 
-    let send = move |event: Event<FormData>| {
-        event.stop_propagation();
-
+    let send = move |_| {
         if name.is_empty() {
             println!("Empty message");
             return;
         }
         let form: HashMap<&str, String>;
         {
-            let r = user.read();
-            let t = r.lock().unwrap();
+            let t = user.read();
             let t = t.as_ref().unwrap();
             form = HashMap::<&'static str, String>::from([
                 ("user_id", t.id.to_string()),
@@ -49,20 +45,16 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let u = user.write();
-                    let mut u = u.lock().unwrap();
-                    let l = u.as_mut().unwrap();
-                    l.api_key = value["api_key"].as_str().unwrap().to_string();
-
+                    user.write_silent().as_mut().unwrap().api_key =
+                        value["api_key"].as_str().unwrap().to_string();
                     name.set(String::new());
                 }
             }
         });
     };
 
-    let m = rooms.read();
-    let rooms = m.lock().unwrap();
-    let rooms: &Vec<Room> = rooms.as_ref();
+    let rooms = rooms.read();
+    let rooms = rooms.0.iter();
 
     let class_room = "room";
     let class_room_active = "room active";
@@ -76,23 +68,21 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
             }
             ul {
                 id: "rooms",
-                for room in rooms {
+                for (room_id, room_name) in rooms {
                     li {
                         Link {
                             class: match cx.props.id {
-                                Some(room_id) => if room.id == room_id { class_room_active } else { class_room },
+                                Some(current_room_id) => if current_room_id == *room_id { class_room_active } else { class_room },
                                 _ => class_room
                             },
-                            to: Route::Conv{ room_id: room.id, room_name: room.name.to_string() },
-                            room.name.as_str()
+                            to: Route::Conv{ room_id: *room_id },
+                            room_name.as_str()
                         }
                     }
                 }
             }
             form {
                 id: "new-room",
-                prevent_default: "onsubmit",
-                onsubmit: send,
                 input {
                     r#type: "text",
                     name: "name",
@@ -103,8 +93,10 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
                     oninput: move |evt| name.set(evt.value.clone()),
                     value: "{name}"
                 }
-                input {
-                    r#type: "submit",
+                button {
+                    id: "send",
+                    prevent_default: "onclick",
+                    onclick: send,
                     "+"
                 }
             }

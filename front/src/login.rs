@@ -14,12 +14,10 @@ pub fn LogIn(cx: Scope) -> Element {
     let password = use_state(cx, || String::new());
 
     let userSetter = AsyncStateSetter::<Option<User>>::new(cx, user, |account_manager, user| {
-        *account_manager.write().lock().unwrap() = user
+        *account_manager.write() = user
     });
 
-    let send = move |event: Event<MouseData>| {
-        event.stop_propagation();
-
+    let send = move |_| {
         if username.is_empty() {
             println!("Empty username");
             return;
@@ -32,13 +30,13 @@ pub fn LogIn(cx: Scope) -> Element {
 
         let url = format!("{BASE_API_URL}/login");
         let username = username.to_string();
-        let t = userSetter.clone();
+        let userSetter = userSetter.clone();
         cx.spawn(async move {
             if let Ok(res) = reqwest::Client::new().post(url).form(&form).send().await {
                 let r = res.text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 202 {
-                    t.set_state(Some(User {
+                    userSetter.set_state(Some(User {
                         id: value["user_id"].as_i64().unwrap(),
                         username: username,
                         api_key: value["api_key"].as_str().unwrap().to_string(),
@@ -49,7 +47,7 @@ pub fn LogIn(cx: Scope) -> Element {
     };
 
     render! {
-        match user.read().lock().unwrap().as_ref() {
+        match user.read().as_ref() {
             Some(_) => render!{SideBar{}},
             None => render!{div{}}
         }

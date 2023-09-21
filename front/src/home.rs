@@ -13,13 +13,10 @@ pub fn Home(cx: Scope) -> Element {
 
     let nav = use_navigator(cx);
 
-    match user.read().lock().unwrap().as_ref() {
+    match user.read().as_ref() {
         Some(_) => {
-            if let Some(room) = rooms.read().lock().unwrap().first() {
-                nav.replace(Route::Conv {
-                    room_id: room.id,
-                    room_name: room.name.to_string(),
-                });
+            if let Some(room) = rooms.read().0.keys().last() {
+                nav.replace(Route::Conv { room_id: *room });
             }
         }
         None => {

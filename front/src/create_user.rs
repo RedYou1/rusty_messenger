@@ -13,9 +13,7 @@ pub fn CreateUser(cx: Scope) -> Element {
     let username = use_state(cx, || String::new());
     let password = use_state(cx, || String::new());
 
-    let send = move |event: Event<FormData>| {
-        event.stop_propagation();
-
+    let send = move |_| {
         if username.is_empty() {
             println!("Empty username");
             return;
@@ -36,9 +34,7 @@ pub fn CreateUser(cx: Scope) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let u = user.write();
-                    let mut u = u.lock().unwrap();
-                    *u = Some(User {
+                    *user.write() = Some(User {
                         id: value["user_id"].as_i64().unwrap(),
                         username: username.to_string(),
                         api_key: value["api_key"].as_str().unwrap().to_string(),
@@ -49,7 +45,7 @@ pub fn CreateUser(cx: Scope) -> Element {
     };
 
     render! {
-        match user.read().lock().unwrap().as_ref() {
+        match user.read().as_ref() {
             Some(_) => render!{SideBar{}},
             None => render!{div{}}
         }
@@ -58,8 +54,6 @@ pub fn CreateUser(cx: Scope) -> Element {
             h1{"Create User"}
             form {
                 id: "create-user",
-                prevent_default: "onsubmit",
-                onsubmit: send,
                 input {
                     r#type: "text",
                     name: "username",
@@ -80,7 +74,8 @@ pub fn CreateUser(cx: Scope) -> Element {
                 }
                 button {
                     id: "send",
-                    r#type: "submit",
+                    prevent_default: "onclick",
+                    onclick: send,
                     "Send"
                 }
             }

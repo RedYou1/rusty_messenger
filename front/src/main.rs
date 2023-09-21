@@ -16,7 +16,6 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use room::Room;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 use structs::Message;
 
 use crate::async_state::AsyncStateSetter;
@@ -37,28 +36,27 @@ pub enum Route {
     LogIn {},
     #[route("/create-user")]
     CreateUser {},
-    #[route("/:room_id/:room_name")]
-    Conv { room_id: i64, room_name:String },
+    #[route("/:room_id")]
+    Conv { room_id: i64 },
     #[route("/:..route")]
     PageNotFound { route: Vec<String> },
 }
 
-pub type AccountManager = Arc<Mutex<Option<User>>>;
-
-type Messages = Arc<Mutex<HashMap<i64, Vec<Message>>>>;
-type Rooms = Arc<Mutex<Vec<Room>>>;
-type Users = Arc<Mutex<HashMap<i64, String>>>;
+pub type AccountManager = Option<User>;
+pub type Messages = HashMap<i64, Vec<Message>>;
+pub struct Rooms(HashMap<i64, String>);
+pub struct Users(HashMap<i64, String>);
 
 fn page(cx: Scope) -> Element {
-    let _ = use_shared_state_provider::<Messages>(cx, || {
-        Arc::new(Mutex::new(HashMap::<i64, Vec<Message>>::new()))
+    let _ = use_shared_state_provider::<Messages>(cx, || HashMap::<i64, Vec<Message>>::new());
+    let _ = use_shared_state_provider::<Rooms>(cx, || Rooms {
+        0: HashMap::<i64, String>::new(),
     });
-    let _ = use_shared_state_provider::<Rooms>(cx, || Arc::new(Mutex::new(Vec::<Room>::new())));
-    let _ = use_shared_state_provider::<Users>(cx, || {
-        Arc::new(Mutex::new(HashMap::<i64, String>::new()))
+    let _ = use_shared_state_provider::<Users>(cx, || Users {
+        0: HashMap::<i64, String>::new(),
     });
-    let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Disconnected);
-    let _ = use_shared_state_provider::<AccountManager>(cx, || Arc::new(Mutex::new(None)));
+    let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Error);
+    let _ = use_shared_state_provider::<AccountManager>(cx, || None);
 
     let messages = use_shared_state::<Messages>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
@@ -67,8 +65,7 @@ fn page(cx: Scope) -> Element {
     let event_source = use_state::<Option<MyEventSource>>(cx, || None);
 
     let message_sender = AsyncStateSetter::<Message>::new(cx, messages, |messages, message| {
-        let m = messages.write();
-        let mut messages = m.lock().unwrap();
+        let mut messages = messages.write();
 
         if !messages.contains_key(&message.room_id) {
             messages.insert(message.room_id, Vec::new());
@@ -78,7 +75,7 @@ fn page(cx: Scope) -> Element {
     });
 
     let room_sender = AsyncStateSetter::<Room>::new(cx, rooms, |rooms, room| {
-        rooms.write().lock().unwrap().push(room)
+        rooms.write().0.insert(room.id, room.name);
     });
 
     let source_state_sender =
@@ -86,18 +83,41 @@ fn page(cx: Scope) -> Element {
             *source_state.write() = state
         });
 
-    if *source_state.read() == SourceState::Disconnected {
-        if let Some(a) = user.read().lock().unwrap().as_ref() {
+    match *source_state.read() {
+        SourceState::Connected | SourceState::ReConnecting => {}
+        SourceState::Disconnected => {
             if event_source.is_some() {
                 event_source.as_ref().unwrap().close();
             }
-            event_source.set(Some(MyEventSource::new(
-                a.id,
-                a.api_key.as_str(),
-                &message_sender,
-                &room_sender,
-                &source_state_sender,
-            )));
+            match user.read().as_ref() {
+                Some(a) => {
+                    event_source.set(Some(MyEventSource::new(
+                        a.id,
+                        a.api_key.as_str(),
+                        &message_sender,
+                        &room_sender,
+                        &source_state_sender,
+                    )));
+                }
+                None => {
+                    event_source.set(None);
+                    source_state_sender.set_state(SourceState::Error);
+                }
+            }
+        }
+        SourceState::Error => {
+            if let Some(a) = user.read().as_ref() {
+                if event_source.is_some() {
+                    event_source.as_ref().unwrap().close();
+                }
+                event_source.set(Some(MyEventSource::new(
+                    a.id,
+                    a.api_key.as_str(),
+                    &message_sender,
+                    &room_sender,
+                    &source_state_sender,
+                )));
+            }
         }
     }
 

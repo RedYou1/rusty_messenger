@@ -216,6 +216,15 @@ form button {
     font-size: 12px;
 }
 
+#status.error::before {
+    content: "status: error";
+}
+
+#status.error {
+    background-color: red;
+    color: #fff;
+}
+
 #status.disconnected::before {
     content: "status: disconnected";
 }
