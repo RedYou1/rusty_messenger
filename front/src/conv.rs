@@ -45,7 +45,7 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let u = user_clone.write();
+                    let u = user_clone.write_silent();
                     let mut l = u.lock().unwrap();
                     let l = l.as_mut().unwrap();
                     l.api_key = value["api_key"].as_str().unwrap().to_string();
@@ -84,7 +84,7 @@ pub fn Conv(cx: Scope, room_id: i64, room_name: String) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    let u = user.write();
+                    let u = user.write_silent();
                     let mut l = u.lock().unwrap();
                     let l = l.as_mut().unwrap();
                     l.api_key = value["api_key"].as_str().unwrap().to_string();

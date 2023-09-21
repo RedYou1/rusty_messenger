@@ -22,6 +22,7 @@ use structs::Message;
 use crate::async_state::AsyncStateSetter;
 use crate::conv::Conv;
 use crate::create_user::CreateUser;
+use crate::event_source::MyEventSource;
 use crate::event_source::SourceState;
 use crate::home::Home;
 use crate::login::LogIn;
@@ -63,6 +64,7 @@ fn page(cx: Scope) -> Element {
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
+    let event_source = use_state::<Option<MyEventSource>>(cx, || None);
 
     let message_sender = AsyncStateSetter::<Message>::new(cx, messages, |messages, message| {
         let m = messages.write();
@@ -84,20 +86,24 @@ fn page(cx: Scope) -> Element {
             *source_state.write() = state
         });
 
-    let r = user.read();
     if *source_state.read() == SourceState::Disconnected {
-        if let Some(a) = r.lock().unwrap().as_ref() {
-            let _ = event_source::MyEventSource::new(
+        if let Some(a) = user.read().lock().unwrap().as_ref() {
+            if event_source.is_some() {
+                event_source.as_ref().unwrap().close();
+            }
+            event_source.set(Some(MyEventSource::new(
                 a.id,
                 a.api_key.as_str(),
                 &message_sender,
                 &room_sender,
                 &source_state_sender,
-            );
+            )));
         }
     }
 
     render! {
+        link{ rel: "stylesheet", href: "/reset.css" }
+        link{ rel: "stylesheet", href: "/style.css" }
         Router::<Route> {}
     }
 }
