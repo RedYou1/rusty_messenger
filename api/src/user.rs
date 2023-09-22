@@ -56,16 +56,16 @@ pub fn add_user<'a>(conn: &'a Connection, user: FormAddUser) -> Result<UserPass>
         ),
     )?;
 
-    return Ok(UserPass {
+    Ok(UserPass {
         id: conn.last_insert_rowid(),
         username: user.username,
         pass: user.password,
         api_key: napi,
-    });
+    })
 }
 
 pub fn logout<'a>(conn: &'a Connection, user_id: i64) -> Result<usize> {
-    return user_update_api_key(conn, "", user_id);
+    user_update_api_key(conn, "", user_id)
 }
 
 pub fn user_select_id<'a>(conn: &'a Connection, user_id: i64) -> Result<UserPass, String> {
@@ -120,28 +120,28 @@ pub fn user_update_api_key<'a, 'b>(
     api_key: &'b str,
     user_id: i64,
 ) -> Result<usize> {
-    return conn.execute(
+    conn.execute(
         "
         UPDATE user
         SET api_key = ?1
         WHERE id = ?2
         ",
         (api_key, user_id),
-    );
+    )
 }
 
 fn map_user(row: &Row) -> Result<User> {
-    return Ok(User {
+    Ok(User {
         id: row.get(0)?,
         username: row.get(1)?,
-    });
+    })
 }
 
 fn map_user_pass(row: &Row) -> Result<UserPass> {
-    return Ok(UserPass {
+    Ok(UserPass {
         id: row.get(0)?,
         username: row.get(1)?,
         pass: row.get(2)?,
         api_key: row.get(3)?,
-    });
+    })
 }

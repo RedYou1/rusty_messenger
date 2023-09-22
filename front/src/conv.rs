@@ -30,7 +30,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         let message_clone = message.to_owned();
         if message_clone.is_empty() {
             println!("Empty message");
-            return ();
+            return;
         }
         let form: HashMap<&str, String>;
         {
@@ -199,7 +199,7 @@ fn message_element(cx: Scope<Message>) -> Element {
         }
     };
 
-    return render! {
+    render! {
         div{
             class: match user.read().user() {
                 Some(user) => if user.id == cx.props.user_id { MESSAGE_ME } else { MESSAGE_OTHER },
@@ -221,5 +221,5 @@ fn message_element(cx: Scope<Message>) -> Element {
                 cx.props.text.as_str()
             }
         }
-    };
+    }
 }

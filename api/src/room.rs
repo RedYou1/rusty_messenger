@@ -51,7 +51,7 @@ pub fn add_room<'a>(conn: &'a Connection, room: FormAddRoom) -> Result<Room> {
         (nroom.id, room.user_id),
     )?;
 
-    return Ok(nroom);
+    Ok(nroom)
 }
 
 pub fn add_user_room<'a>(
@@ -61,14 +61,13 @@ pub fn add_user_room<'a>(
     let room = room_select_id(conn, form.room_id)?;
     let other = user_select_username(conn, form.user_other.as_str())?;
 
-    if let Err(_) = conn.execute(
+    match conn.execute(
         "INSERT INTO user_room (user_id, room_id) VALUES (?1, ?2)",
         (other.id, form.user_id),
     ) {
-        return Err(format!("cant prepare"));
+        Ok(_) => Ok((room, other.id)),
+        Err(_) => Err(format!("cant prepare")),
     }
-
-    return Ok((room, other.id));
 }
 
 pub fn room_select_id<'a>(conn: &'a Connection, room_id: i64) -> Result<Room, String> {
@@ -97,12 +96,12 @@ pub fn select_users_room<'a>(conn: &'a Connection, room_id: i64) -> Result<Vec<i
     let mut stmt = conn.prepare("SELECT user_id FROM user_room WHERE room_id = ?1")?;
     let rows = stmt.query([room_id])?;
     let m = rows.mapped(|row| Ok(row.get::<usize, i64>(0)?));
-    return m.collect();
+    m.collect()
 }
 
 fn map_room(row: &Row) -> Result<Room> {
-    return Ok(Room {
+    Ok(Room {
         id: row.get(0)?,
         name: row.get(1)?,
-    });
+    })
 }

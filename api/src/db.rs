@@ -109,7 +109,7 @@ pub fn establish_connection() -> Result<Connection> {
         ",
     )?;
 
-    return Ok(conn);
+    Ok(conn)
 }
 
 pub fn load_rooms(conn: &Connection, user_id: i64) -> Result<Vec<Room>> {
@@ -123,5 +123,5 @@ pub fn load_rooms(conn: &Connection, user_id: i64) -> Result<Vec<Room>> {
         })
     });
 
-    return m.collect();
+    m.collect()
 }

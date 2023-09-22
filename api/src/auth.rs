@@ -29,11 +29,10 @@ pub fn validate_user_key<'a, 'b>(
     ))
     .unwrap();
 
-    if user_update_api_key(&conn, napi.as_str(), user_id).is_err() {
-        return Err(format!("internal error while updating api key"));
+    match user_update_api_key(&conn, napi.as_str(), user_id) {
+        Ok(_) => Ok(napi),
+        Err(_) => Err(format!("internal error while updating api key")),
     }
-
-    return Ok(napi);
 }
 
 pub fn validate_login<'a, 'b, 'c>(
@@ -54,11 +53,10 @@ pub fn validate_login<'a, 'b, 'c>(
     ))
     .unwrap();
 
-    if user_update_api_key(&conn, napi.as_str(), bduser.id).is_err() {
-        return Err(format!("internal error while updating api key"));
+    match user_update_api_key(&conn, napi.as_str(), bduser.id) {
+        Ok(_) => Ok((bduser.id, napi)),
+        Err(_) => Err(format!("internal error while updating api key")),
     }
-
-    return Ok((bduser.id, napi));
 }
 
 pub fn validate_user_pass<'a, 'b>(
@@ -80,9 +78,8 @@ pub fn validate_user_pass<'a, 'b>(
     ))
     .unwrap();
 
-    if user_update_api_key(&conn, napi.as_str(), user_id).is_err() {
-        return Err(format!("internal error while updating api key"));
+    match user_update_api_key(&conn, napi.as_str(), user_id) {
+        Ok(_) => Ok(napi),
+        Err(_) => Err(format!("internal error while updating api key")),
     }
-
-    return Ok(napi);
 }

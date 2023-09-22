@@ -86,6 +86,6 @@ impl MyEventSource {
         source
             .source
             .set_onmessage(Some(source.messageF.as_ref().unchecked_ref()));
-        return source;
+        source
     }
 }

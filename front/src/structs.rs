@@ -30,7 +30,7 @@ pub fn deserialize(date: i64, room_id: i64, user_id: i64, text: &str) -> Message
 }
 
 pub fn serialize_login(username: String, password: String) -> HashMap<&'static str, String> {
-    return HashMap::<&'static str, String>::from([("username", username), ("password", password)]);
+    HashMap::<&'static str, String>::from([("username", username), ("password", password)])
 }
 
 pub fn serialize_message(
@@ -39,10 +39,10 @@ pub fn serialize_message(
     api_key: String,
     text: String,
 ) -> HashMap<&'static str, String> {
-    return HashMap::<&'static str, String>::from([
+    HashMap::<&'static str, String>::from([
         ("room_id", room.to_string()),
         ("user_id", user_id.to_string()),
         ("api_key", api_key),
         ("text", text),
-    ]);
+    ])
 }

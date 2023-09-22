@@ -27,8 +27,7 @@ type Convs = RwLock<HashMap<i64, Sender<String>>>;
 #[post("/adduser", data = "<form>")]
 fn post_adduser(form: Form<FormAddUser>) -> String {
     let conn = establish_connection().unwrap();
-    let user = add_user(&conn, form.into_inner());
-    match user {
+    match add_user(&conn, form.into_inner()) {
         Ok(user) => format!(
             "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"username\": \"{}\", \"api_key\": \"{}\" }}",
             Status::Created.code, user.id, user.username, user.api_key
@@ -44,8 +43,7 @@ fn post_adduser(form: Form<FormAddUser>) -> String {
 #[get("/user/<user_id>")]
 fn get_user(user_id: i64) -> String {
     let conn = establish_connection().unwrap();
-    let user = user_select_id(&conn, user_id);
-    match user {
+    match user_select_id(&conn, user_id) {
         Ok(user) => {
             format!(
             "{{ \"status_code\": {}, \"status\": \"Ok\", \"user_id\": {}, \"username\": \"{}\" }}",
@@ -88,14 +86,16 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
 
     let inform = form.into_inner();
     let user_id = inform.user_id;
-    let user = validate_user_key(&conn, inform.user_id, inform.api_key.as_str());
-    if user.is_err() {
-        return format!(
-            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-            Status::Unauthorized.code,
-            user.unwrap_err()
-        );
-    }
+    let user = match validate_user_key(&conn, inform.user_id, inform.api_key.as_str()) {
+        Ok(user) => user,
+        Err(e) => {
+            return format!(
+                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+                Status::Unauthorized.code,
+                e
+            );
+        }
+    };
 
     let room = add_room(&conn, inform).unwrap();
 
@@ -105,11 +105,11 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
         let _ = conv.send(room.serialize());
     }
 
-    return format!(
+    format!(
         "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
         Status::Created.code,
-        user.unwrap()
-    );
+        user
+    )
 }
 
 /// Returns an infinite stream of server-sent events. Each event is a message
@@ -158,7 +158,7 @@ async fn get_events(
     let messages = load_messages(&conn, user_id).unwrap();
     let rooms = load_rooms(&conn, user_id).unwrap();
 
-    return Ok(EventStream! {
+    Ok(EventStream! {
         for rm in rooms {
             yield Event::json(&rm.serialize());
         };
@@ -180,7 +180,7 @@ async fn get_events(
 
             yield Event::json(&msg);
         }
-    });
+    })
 }
 
 #[post("/message", data = "<form>")]
@@ -189,41 +189,45 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
 
     let inform = form.into_inner();
     let room_id = inform.room_id;
-    let user = validate_user_key(&conn, inform.user_id, inform.api_key.as_str());
-    if user.is_err() {
-        return format!(
-            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-            Status::Unauthorized.code,
-            user.unwrap_err()
-        );
-    }
+    let user = match validate_user_key(&conn, inform.user_id, inform.api_key.as_str()) {
+        Ok(user) => user,
+        Err(e) => {
+            return format!(
+                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+                Status::Unauthorized.code,
+                e
+            );
+        }
+    };
 
     let message = add_message(&conn, inform).unwrap();
     let smessage = message.serialize();
 
     let lock = convs.read().await;
 
-    let users = select_users_room(&conn, room_id);
-    if users.is_err() {
-        return format!(
-            "{{ \"status_code\": {}, \"status\": \"InternalServerError\", \"reason\": \"{}\" }}",
-            Status::InternalServerError.code,
-            users.unwrap_err()
-        );
-    }
+    let users = match select_users_room(&conn, room_id) {
+        Ok(users) => users,
+        Err(e) => {
+            return format!(
+                "{{ \"status_code\": {}, \"status\": \"InternalServerError\", \"reason\": \"{}\" }}",
+                Status::InternalServerError.code,
+                e
+            );
+        }
+    };
 
-    for user_id in users.unwrap() {
+    for user_id in users {
         if let Some(conv) = lock.get(&user_id) {
             // A send 'fails' if there are no active subscribers. That's okay.
             let _ = conv.send(smessage.to_string());
         }
     }
 
-    return format!(
+    format!(
         "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
         Status::Created.code,
-        user.unwrap()
-    );
+        user
+    )
 }
 
 #[post("/invite", data = "<form>")]
@@ -231,41 +235,43 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
     let conn = establish_connection().unwrap();
 
     let inform = form.into_inner();
-    let user = validate_user_key(&conn, inform.user_id, inform.api_key.as_str());
-    if user.is_err() {
-        return format!(
-            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-            Status::Unauthorized.code,
-            user.unwrap_err()
-        );
-    }
+    let user = match validate_user_key(&conn, inform.user_id, inform.api_key.as_str()) {
+        Ok(user) => user,
+        Err(e) => {
+            return format!(
+                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
+                Status::Unauthorized.code,
+                e
+            );
+        }
+    };
 
-    let room = add_user_room(&conn, inform);
-
-    if room.is_err() {
-        return format!(
-            "{{ \"status_code\": {}, \"status\": \"BadRequest\", \"reason\": \"{}\" }}",
-            Status::BadRequest.code,
-            room.unwrap_err()
-        );
-    }
-    let room = room.unwrap();
+    let room = match add_user_room(&conn, inform) {
+        Ok(room) => room,
+        Err(e) => {
+            return format!(
+                "{{ \"status_code\": {}, \"status\": \"BadRequest\", \"reason\": \"{}\" }}",
+                Status::BadRequest.code,
+                e
+            );
+        }
+    };
 
     let lock = convs.read().await;
     if let Some(conv) = lock.get(&room.1) {
         // A send 'fails' if there are no active subscribers. That's okay.
         let _ = conv.send(room.0.serialize());
         let messages = load_messages(&conn, room.1).unwrap();
-        for message in messages{
+        for message in messages {
             let _ = conv.send(message.serialize());
         }
     }
 
-    return format!(
+    format!(
         "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
         Status::Created.code,
-        user.unwrap()
-    );
+        user
+    )
 }
 
 mod cors;

@@ -46,12 +46,12 @@ pub fn add_message<'a, 'b>(conn: &'a Connection, message: FormMessage) -> Result
         ),
     )?;
 
-    return Ok(Message {
+    Ok(Message {
         date: date,
         room_id: message.room_id,
         user_id: message.user_id,
         text: message.text,
-    });
+    })
 }
 
 pub fn load_messages(conn: &Connection, user_id: i64) -> Result<Vec<Message>> {
@@ -64,14 +64,14 @@ pub fn load_messages(conn: &Connection, user_id: i64) -> Result<Vec<Message>> {
         messages.push(message?);
     }
 
-    return Ok(messages);
+    Ok(messages)
 }
 
 fn map_message(row: &Row) -> Result<Message> {
-    return Ok(Message {
+    Ok(Message {
         date: DateTimeSql::parse(row.get(0)?).unwrap(),
         room_id: row.get(1)?,
         user_id: row.get(2)?,
         text: row.get(3)?,
-    });
+    })
 }
