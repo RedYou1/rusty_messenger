@@ -15,7 +15,6 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
 
     let state = match *source_state.read() {
         SourceState::Error => "error",
-        SourceState::Disconnected => "disconnected",
         SourceState::ReConnecting => "reconnecting",
         SourceState::Connected => "connected",
     };
@@ -28,7 +27,7 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
         let form: HashMap<&str, String>;
         {
             let t = user.read();
-            let t = t.as_ref().unwrap();
+            let t = t.user().unwrap();
             form = HashMap::<&'static str, String>::from([
                 ("user_id", t.id.to_string()),
                 ("api_key", t.api_key.to_string()),
@@ -45,8 +44,8 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    user.write_silent().as_mut().unwrap().api_key =
-                        value["api_key"].as_str().unwrap().to_string();
+                    user.write_silent()
+                        .set_api_key(value["api_key"].as_str().unwrap().to_string());
                     name.set(String::new());
                 }
             }

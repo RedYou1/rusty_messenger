@@ -225,15 +225,6 @@ form button {
     color: #fff;
 }
 
-#status.disconnected::before {
-    content: "status: disconnected";
-}
-
-#status.disconnected {
-    background-color: red;
-    color: #fff;
-}
-
 #status.reconnecting::before {
     content: "status: reconnecting";
 }

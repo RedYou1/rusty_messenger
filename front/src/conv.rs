@@ -1,5 +1,6 @@
 use chrono::Local;
 use dioxus::prelude::*;
+use dioxus_router::prelude::use_navigator;
 use std::collections::HashMap;
 
 use crate::async_state::AsyncStateSetter;
@@ -12,6 +13,9 @@ use crate::{Messages, Rooms};
 #[inline_props]
 pub fn Conv(cx: Scope, room_id: i64) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
+
+    user.read().needUser(use_navigator(cx));
+
     let messages = use_shared_state::<Messages>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
 
@@ -31,7 +35,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         let form: HashMap<&str, String>;
         {
             let t = user_clone.read();
-            let t = t.as_ref().unwrap();
+            let t = t.user().unwrap();
             form = serialize_message(
                 *room_id,
                 t.id,
@@ -47,8 +51,9 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    user_clone.write_silent().as_mut().unwrap().api_key =
-                        value["api_key"].as_str().unwrap().to_string();
+                    user_clone
+                        .write_silent()
+                        .set_api_key(value["api_key"].as_str().unwrap().to_string());
                     message_clone.set(String::new());
                 }
             }
@@ -65,7 +70,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         let form: HashMap<&str, String>;
         {
             let t = user.read();
-            let t = t.as_ref().unwrap();
+            let t = t.user().unwrap();
             form = HashMap::<&'static str, String>::from([
                 ("user_id", t.id.to_string()),
                 ("api_key", t.api_key.to_string()),
@@ -81,8 +86,8 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    user.write_silent().as_mut().unwrap().api_key =
-                        value["api_key"].as_str().unwrap().to_string();
+                    user.write_silent()
+                        .set_api_key(value["api_key"].as_str().unwrap().to_string());
                     username.set(String::new());
                 }
             }
@@ -196,7 +201,7 @@ fn message_element(cx: Scope<Message>) -> Element {
 
     return render! {
         div{
-            class: match user.read().as_ref() {
+            class: match user.read().user() {
                 Some(user) => if user.id == cx.props.user_id { MESSAGE_ME } else { MESSAGE_OTHER },
                 None => MESSAGE_OTHER
             },

@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 
+mod account_manager;
 mod async_state;
 mod conv;
 mod create_user;
@@ -18,14 +19,13 @@ use room::Room;
 use std::collections::HashMap;
 use structs::Message;
 
+use crate::account_manager::AccountManager;
 use crate::async_state::AsyncStateSetter;
 use crate::conv::Conv;
 use crate::create_user::CreateUser;
-use crate::event_source::MyEventSource;
 use crate::event_source::SourceState;
 use crate::home::Home;
 use crate::login::LogIn;
-use crate::structs::User;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
@@ -42,7 +42,6 @@ pub enum Route {
     PageNotFound { route: Vec<String> },
 }
 
-pub type AccountManager = Option<User>;
 pub type Messages = HashMap<i64, Vec<Message>>;
 pub struct Rooms(HashMap<i64, String>);
 pub struct Users(HashMap<i64, String>);
@@ -56,13 +55,10 @@ fn page(cx: Scope) -> Element {
         0: HashMap::<i64, String>::new(),
     });
     let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Error);
-    let _ = use_shared_state_provider::<AccountManager>(cx, || None);
 
     let messages = use_shared_state::<Messages>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
-    let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
-    let event_source = use_state::<Option<MyEventSource>>(cx, || None);
 
     let message_sender = AsyncStateSetter::<Message>::new(cx, messages, |messages, message| {
         let mut messages = messages.write();
@@ -82,42 +78,16 @@ fn page(cx: Scope) -> Element {
         AsyncStateSetter::<SourceState>::new(cx, source_state, |source_state, state| {
             *source_state.write() = state
         });
+    let _ = use_shared_state_provider::<AccountManager>(cx, move || {
+        AccountManager::new(message_sender, room_sender, source_state_sender)
+    });
 
-    match *source_state.read() {
-        SourceState::Connected | SourceState::ReConnecting => {}
-        SourceState::Disconnected => {
-            if event_source.is_some() {
-                event_source.as_ref().unwrap().close();
-            }
-            match user.read().as_ref() {
-                Some(a) => {
-                    event_source.set(Some(MyEventSource::new(
-                        a.id,
-                        a.api_key.as_str(),
-                        &message_sender,
-                        &room_sender,
-                        &source_state_sender,
-                    )));
-                }
-                None => {
-                    event_source.set(None);
-                    source_state_sender.set_state(SourceState::Error);
-                }
-            }
-        }
-        SourceState::Error => {
-            if let Some(a) = user.read().as_ref() {
-                if event_source.is_some() {
-                    event_source.as_ref().unwrap().close();
-                }
-                event_source.set(Some(MyEventSource::new(
-                    a.id,
-                    a.api_key.as_str(),
-                    &message_sender,
-                    &room_sender,
-                    &source_state_sender,
-                )));
-            }
+    let user = use_shared_state::<AccountManager>(cx).unwrap();
+    if user.read().user().is_some() {
+        match *source_state.read() {
+            SourceState::Error => user.write().retry(),
+            SourceState::Connected => user.write_silent().connected(),
+            _ => {}
         }
     }
 

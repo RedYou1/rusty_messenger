@@ -14,7 +14,7 @@ pub fn LogIn(cx: Scope) -> Element {
     let password = use_state(cx, || String::new());
 
     let userSetter = AsyncStateSetter::<Option<User>>::new(cx, user, |account_manager, user| {
-        *account_manager.write() = user
+        account_manager.write().set_user(user)
     });
 
     let send = move |_| {
@@ -47,7 +47,7 @@ pub fn LogIn(cx: Scope) -> Element {
     };
 
     render! {
-        match user.read().as_ref() {
+        match user.read().user() {
             Some(_) => render!{SideBar{}},
             None => render!{div{}}
         }

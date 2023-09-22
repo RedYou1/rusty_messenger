@@ -11,9 +11,8 @@ use crate::{
 #[derive(PartialEq)]
 pub enum SourceState {
     Error = 0b000,
-    Disconnected = 0b001,
-    ReConnecting = 0b010,
-    Connected = 0b100,
+    ReConnecting = 0b01,
+    Connected = 0b10,
 }
 
 pub struct MyEventSource {
@@ -50,7 +49,7 @@ impl MyEventSource {
                 Box::new(move || open.set_state(SourceState::Connected)) as Box<dyn FnMut()>
             ),
             errorF: Closure::wrap(
-                Box::new(move |_| error.set_state(SourceState::Disconnected))
+                Box::new(move |_| error.set_state(SourceState::Error))
                     as Box<dyn FnMut(Event)>,
             ),
             messageF: Closure::wrap(Box::new(move |event: MessageEvent| {

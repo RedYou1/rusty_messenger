@@ -34,18 +34,18 @@ pub fn CreateUser(cx: Scope) -> Element {
                 let r = res.unwrap().text().await.unwrap();
                 let value = json::parse(r.as_str()).unwrap();
                 if value["status_code"].as_u16().unwrap() == 201 {
-                    *user.write() = Some(User {
+                    user.write().set_user(Some(User {
                         id: value["user_id"].as_i64().unwrap(),
                         username: username.to_string(),
                         api_key: value["api_key"].as_str().unwrap().to_string(),
-                    });
+                    }));
                 }
             }
         });
     };
 
     render! {
-        match user.read().as_ref() {
+        match user.read().user() {
             Some(_) => render!{SideBar{}},
             None => render!{div{}}
         }
