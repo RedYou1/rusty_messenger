@@ -1,11 +1,10 @@
-use dioxus_router::prelude::Navigator;
+use lib::Message;
 
 use crate::{
     async_state::AsyncStateSetter,
     event_source::{MyEventSource, SourceState},
     room::Room,
-    structs::{Message, User},
-    Route,
+    structs::User,
 };
 
 pub struct AccountManager {
@@ -30,12 +29,6 @@ impl AccountManager {
             message_sender: message_sender,
             room_sender: room_sender,
             source_state_sender: source_state_sender,
-        }
-    }
-
-    pub fn needUser(&self, navigator: &Navigator) {
-        if self.current.is_none() {
-            navigator.replace(Route::LogIn {});
         }
     }
 
@@ -89,7 +82,7 @@ impl AccountManager {
     pub fn set_api_key(&mut self, api_key: String) {
         self.current.as_mut().unwrap().api_key = api_key;
     }
-    
+
     pub fn connected(&mut self) {
         self.try_tentative = 1;
     }

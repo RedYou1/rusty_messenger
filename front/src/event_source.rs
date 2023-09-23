@@ -1,10 +1,10 @@
+use lib::Message;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Event, EventSource, MessageEvent};
 
 use crate::{
     async_state::AsyncStateSetter,
-    room::Room,
-    structs::{deserialize, Message},
+    room::{Room, RoomData},
     BASE_API_URL,
 };
 
@@ -49,8 +49,7 @@ impl MyEventSource {
                 Box::new(move || open.set_state(SourceState::Connected)) as Box<dyn FnMut()>
             ),
             errorF: Closure::wrap(
-                Box::new(move |_| error.set_state(SourceState::Error))
-                    as Box<dyn FnMut(Event)>,
+                Box::new(move |_| error.set_state(SourceState::Error)) as Box<dyn FnMut(Event)>
             ),
             messageF: Closure::wrap(Box::new(move |event: MessageEvent| {
                 let value = json::parse(
@@ -62,7 +61,7 @@ impl MyEventSource {
                 .unwrap();
 
                 match value["objectId"].as_i8().unwrap() {
-                    0 => message_sender_thread.set_state(deserialize(
+                    0 => message_sender_thread.set_state(Message::deserialize(
                         value["date"].as_i64().unwrap(),
                         value["room_id"].as_i64().unwrap(),
                         value["user_id"].as_i64().unwrap(),
@@ -70,7 +69,10 @@ impl MyEventSource {
                     )),
                     1 => room_sender_thread.set_state(Room {
                         id: value["id"].as_i64().unwrap(),
-                        name: value["name"].as_str().unwrap().to_string(),
+                        data: RoomData {
+                            name: value["name"].as_str().unwrap().to_string(),
+                            messages: Vec::new(),
+                        },
                     }),
                     _ => panic!("MyEventSource Object ID Not Supported"),
                 }

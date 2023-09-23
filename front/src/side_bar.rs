@@ -67,7 +67,7 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
             }
             ul {
                 id: "rooms",
-                for (room_id, room_name) in rooms {
+                for (room_id, room_data) in rooms {
                     li {
                         Link {
                             class: match cx.props.id {
@@ -75,7 +75,7 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
                                 _ => class_room
                             },
                             to: Route::Conv{ room_id: *room_id },
-                            room_name.as_str()
+                            room_data.name.as_str()
                         }
                     }
                 }

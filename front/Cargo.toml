@@ -7,6 +7,7 @@ resolver = "2"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+lib = { path = "../lib" }
 chrono = "0.4.28"
 dioxus = "0.4.0"
 dioxus-web = "0.4.0"

@@ -1,26 +1,31 @@
 use chrono::Local;
 use dioxus::prelude::*;
 use dioxus_router::prelude::use_navigator;
+use lib::Message;
 use std::collections::HashMap;
 
 use crate::async_state::AsyncStateSetter;
 use crate::side_bar::SideBar;
-use crate::structs::{serialize_message, Message};
+use crate::structs::serialize_message;
+use crate::Rooms;
+use crate::Route;
 use crate::BASE_API_URL;
 use crate::{AccountManager, Users};
-use crate::{Messages, Rooms};
 
 #[inline_props]
 pub fn Conv(cx: Scope, room_id: i64) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
 
-    user.read().needUser(use_navigator(cx));
+    let nav = use_navigator(cx);
+    if user.read().user().is_none() {
+        nav.replace(Route::LogIn {});
+        return render! {div{}};
+    }
 
-    let messages = use_shared_state::<Messages>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
 
-    let room_name = rooms.read();
-    let room_name = room_name.0.get(room_id).unwrap();
+    let room_data = rooms.read();
+    let room_data = room_data.0.get(room_id).unwrap();
 
     let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
@@ -94,14 +99,11 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         });
     };
 
-    let messages = messages.read();
-    let messages = messages.get(room_id);
-
     render! {
         SideBar{id: *room_id}
         div{
             id:"conv",
-            span { room_name.as_str() }
+            span { room_data.name.as_str() }
             form {
                 id: "invite",
                 input {
@@ -124,18 +126,13 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
 
             div{
                 id: "messages",
-                match messages {
-                    Some(messages) => render!{
-                        for msg in messages {
-                            message_element {
-                                date: msg.date,
-                                room_id: msg.room_id,
-                                user_id: msg.user_id,
-                                text: msg.text.to_string()
-                            }
+                match room_data.messages.is_empty() {
+                    true => render!{div{}},
+                    false => render!{
+                        for msg in room_data.messages.iter() {
+                            message_element(cx, msg)
                         }
                     },
-                    None => render!{div{}}
                 }
             }
 
@@ -165,26 +162,30 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
 const MESSAGE_ME: &'static str = "messageMe";
 const MESSAGE_OTHER: &'static str = "messageOther";
 
-fn get_user(users: &UseSharedState<Users>, user_id: i64) -> Option<String> {
-    users.read().0.get(&user_id).map(|u| u.to_string())
-}
-
-fn message_element(cx: Scope<Message>) -> Element {
+fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
     let users = use_shared_state::<Users>(cx).unwrap();
     let user = use_shared_state::<AccountManager>(cx).unwrap();
 
-    let user_id = cx.props.user_id;
-
+    let message_user_id = message.user_id;
     let users_setter = AsyncStateSetter::<String>::new(cx, users, move |users, username| {
-        users.write().0.insert(user_id, username);
+        users.write().0.insert(message_user_id, Some(username));
     });
 
-    let username = match get_user(users, user_id) {
-        Some(username) => username,
+    let username;
+    {
+        let t = users.read();
+        username =
+            t.0.get(&message_user_id)
+                .map(|s| s.as_ref().map(|s| s.to_string()))
+    }
+    let username = match username {
+        Some(Some(username)) => username.to_string(),
+        Some(None) => String::from("Loading..."),
         None => {
+            users.write().0.insert(message_user_id, None);
             cx.spawn(async move {
                 let res = reqwest::Client::new()
-                    .get(format!("{BASE_API_URL}/user/{}", user_id))
+                    .get(format!("{BASE_API_URL}/user/{}", message_user_id))
                     .send()
                     .await;
                 if res.is_ok() {
@@ -202,7 +203,7 @@ fn message_element(cx: Scope<Message>) -> Element {
     render! {
         div{
             class: match user.read().user() {
-                Some(user) => if user.id == cx.props.user_id { MESSAGE_ME } else { MESSAGE_OTHER },
+                Some(user) => if user.id == message_user_id { MESSAGE_ME } else { MESSAGE_OTHER },
                 None => MESSAGE_OTHER
             },
             div{
@@ -213,12 +214,12 @@ fn message_element(cx: Scope<Message>) -> Element {
                 }
                 span{
                     class: "message-date",
-                    cx.props.date.with_timezone(&Local).naive_local().to_string()
+                    message.date.with_timezone(&Local).naive_local().to_string()
                 }
             }
             span{
                 class: "message-text",
-                cx.props.text.as_str()
+                message.text.as_str()
             }
         }
     }

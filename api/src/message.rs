@@ -1,16 +1,9 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+use lib::Message;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Connection, Result, Row};
 
 use crate::db::DateTimeSql;
-
-#[derive(Debug, Clone)]
-pub struct Message {
-    pub date: DateTime<Utc>,
-    pub room_id: i64,
-    pub user_id: i64,
-    pub text: String,
-}
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -19,19 +12,6 @@ pub struct FormMessage {
     pub api_key: String,
     pub room_id: i64,
     pub text: String,
-}
-
-impl Message {
-    pub fn serialize(&self) -> String {
-        format!(
-            "{{ \"objectId\": {}, \"date\": {}, \"room_id\": {}, \"user_id\": {}, \"text\": \"{}\" }}",
-            0,
-            self.date.timestamp(),
-            self.room_id,
-            self.user_id,
-            self.text.clone(),
-        )
-    }
 }
 
 pub fn add_message<'a, 'b>(conn: &'a Connection, message: FormMessage) -> Result<Message> {

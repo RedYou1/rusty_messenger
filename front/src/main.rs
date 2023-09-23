@@ -15,9 +15,9 @@ pub const BASE_API_URL: &'static str = "http://127.0.0.1:8000";
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use room::Room;
+use lib::Message;
+use room::{Room, RoomData};
 use std::collections::HashMap;
-use structs::Message;
 
 use crate::account_manager::AccountManager;
 use crate::async_state::AsyncStateSetter;
@@ -42,36 +42,32 @@ pub enum Route {
     PageNotFound { route: Vec<String> },
 }
 
-pub type Messages = HashMap<i64, Vec<Message>>;
-pub struct Rooms(HashMap<i64, String>);
-pub struct Users(HashMap<i64, String>);
+pub struct Rooms(HashMap<i64, RoomData>);
+pub struct Users(HashMap<i64, Option<String>>);
 
 fn page(cx: Scope) -> Element {
-    let _ = use_shared_state_provider::<Messages>(cx, || HashMap::<i64, Vec<Message>>::new());
     let _ = use_shared_state_provider::<Rooms>(cx, || Rooms {
-        0: HashMap::<i64, String>::new(),
+        0: HashMap::<i64, RoomData>::new(),
     });
     let _ = use_shared_state_provider::<Users>(cx, || Users {
-        0: HashMap::<i64, String>::new(),
+        0: HashMap::<i64, Option<String>>::new(),
     });
     let _ = use_shared_state_provider::<SourceState>(cx, || SourceState::Error);
 
-    let messages = use_shared_state::<Messages>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
 
-    let message_sender = AsyncStateSetter::<Message>::new(cx, messages, |messages, message| {
-        let mut messages = messages.write();
+    let message_sender = AsyncStateSetter::<Message>::new(cx, rooms, |rooms, message| {
+        let mut rooms = rooms.write();
 
-        if !messages.contains_key(&message.room_id) {
-            messages.insert(message.room_id, Vec::new());
+        match rooms.0.get_mut(&message.room_id) {
+            None => panic!("message add room_id:{} doesn't exists", message.room_id),
+            Some(room) => room.messages.push(message),
         }
-        let vec = messages.get_mut(&message.room_id).unwrap();
-        vec.push(message);
     });
 
     let room_sender = AsyncStateSetter::<Room>::new(cx, rooms, |rooms, room| {
-        rooms.write().0.insert(room.id, room.name);
+        rooms.write().0.insert(room.id, room.data);
     });
 
     let source_state_sender =
