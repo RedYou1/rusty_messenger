@@ -1,25 +1,8 @@
+use lib::Room;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Connection, Result, Row};
 
 use crate::user::user_select_username;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(crate = "rocket::serde")]
-pub struct Room {
-    pub id: i64,
-    pub name: String,
-}
-
-impl Room {
-    pub fn serialize(&self) -> String {
-        format!(
-            "{{ \"objectId\": {}, \"id\": {}, \"name\": \"{}\" }}",
-            1,
-            self.id,
-            self.name.clone(),
-        )
-    }
-}
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]

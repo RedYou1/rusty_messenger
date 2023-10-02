@@ -15,8 +15,8 @@ pub const BASE_API_URL: &'static str = "http://127.0.0.1:8000";
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use lib::Message;
-use room::{Room, RoomData};
+use lib::{Message, Room};
+use room::RoomData;
 use std::collections::HashMap;
 
 use crate::account_manager::AccountManager;
@@ -67,7 +67,13 @@ fn page(cx: Scope) -> Element {
     });
 
     let room_sender = AsyncStateSetter::<Room>::new(cx, rooms, |rooms, room| {
-        rooms.write().0.insert(room.id, room.data);
+        rooms.write().0.insert(
+            room.id,
+            RoomData {
+                name: room.name,
+                messages: Vec::new(),
+            },
+        );
     });
 
     let source_state_sender =

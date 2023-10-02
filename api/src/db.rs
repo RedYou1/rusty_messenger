@@ -1,13 +1,12 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
 use dotenv::dotenv;
+use lib::Room;
 use rocket::serde::ser::StdError;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::{Connection, Result};
 use std::error::Error;
 use std::fmt::Display;
 use std::{env, fmt};
-
-use crate::room::Room;
 
 pub struct DateTimeSql(pub NaiveDateTime);
 

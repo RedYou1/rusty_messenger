@@ -1,9 +1,8 @@
-use lib::Message;
+use lib::{Message, Room};
 
 use crate::{
     async_state::AsyncStateSetter,
     event_source::{MyEventSource, SourceState},
-    room::Room,
     structs::User,
 };
 

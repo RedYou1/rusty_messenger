@@ -1,12 +1,8 @@
-use lib::Message;
+use lib::{EventMessage, Message, Room};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Event, EventSource, MessageEvent};
 
-use crate::{
-    async_state::AsyncStateSetter,
-    room::{Room, RoomData},
-    BASE_API_URL,
-};
+use crate::{async_state::AsyncStateSetter, BASE_API_URL};
 
 #[derive(PartialEq)]
 pub enum SourceState {
@@ -60,21 +56,10 @@ impl MyEventSource {
                 )
                 .unwrap();
 
-                match value["objectId"].as_i8().unwrap() {
-                    0 => message_sender_thread.set_state(Message::deserialize(
-                        value["date"].as_i64().unwrap(),
-                        value["room_id"].as_i64().unwrap(),
-                        value["user_id"].as_i64().unwrap(),
-                        value["text"].as_str().unwrap(),
-                    )),
-                    1 => room_sender_thread.set_state(Room {
-                        id: value["id"].as_i64().unwrap(),
-                        data: RoomData {
-                            name: value["name"].as_str().unwrap().to_string(),
-                            messages: Vec::new(),
-                        },
-                    }),
-                    _ => panic!("MyEventSource Object ID Not Supported"),
+                match EventMessage::parse(&value) {
+                    Ok(EventMessage::Room(room)) => room_sender_thread.set_state(room),
+                    Ok(EventMessage::Message(message)) => message_sender_thread.set_state(message),
+                    Err(s) => panic!("{s}"),
                 }
             }) as Box<dyn FnMut(MessageEvent)>),
         };
