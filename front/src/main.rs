@@ -11,7 +11,7 @@ mod room;
 mod side_bar;
 mod structs;
 
-pub const BASE_API_URL: &'static str = "http://127.0.0.1:8000";
+pub const BASE_API_URL: &'static str = "http://172.19.67.102:8000";
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;

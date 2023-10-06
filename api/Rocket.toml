@@ -1,0 +1,7 @@
+[debug]
+address = "172.19.67.102" #127.0.0.1
+port = 8000
+
+[release]
+address = "172.19.67.102"
+port = 8000
