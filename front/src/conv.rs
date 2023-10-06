@@ -167,6 +167,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                     r#type: "text",
                     name: "message",
                     id: "message",
+                    autofocus: true,
                     autocomplete: "off",
                     placeholder: "Send a message...",
                     autofocus: true,

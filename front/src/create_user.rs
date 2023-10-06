@@ -73,6 +73,7 @@ pub fn CreateUser(cx: Scope) -> Element {
                     r#type: "text",
                     name: "username",
                     id: "username",
+                    autofocus: true,
                     autocomplete: "off",
                     placeholder: "username",
                     oninput: move |evt| username.set(evt.value.clone()),

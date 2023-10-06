@@ -19,16 +19,14 @@ where
         Container: 'static,
         Func: Fn(&UseSharedState<Container>, Value) + 'static,
     {
+        let state = state.to_owned();
         AsyncStateSetter::<Value> {
             0: Arc::new(Mutex::new(
-                use_coroutine(cx, |mut receiver: UnboundedReceiver<Value>| unsafe {
-                    let state = state as *const UseSharedState<Container>;
-                    async move {
-                        loop {
-                            match receiver.next().await {
-                                Some(v) => func(state.as_ref().unwrap(), v),
-                                None => panic!("AsyncStateSetter receive None"),
-                            }
+                use_coroutine(cx, |mut receiver: UnboundedReceiver<Value>| async move {
+                    loop {
+                        match receiver.next().await {
+                            Some(v) => func(&state, v),
+                            None => panic!("AsyncStateSetter receive None"),
                         }
                     }
                 })
