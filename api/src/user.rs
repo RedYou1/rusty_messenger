@@ -2,7 +2,9 @@ use chrono::Utc;
 use pwhash::bcrypt;
 use rand::Rng;
 use rocket::serde::{Deserialize, Serialize};
-use rusqlite::{Connection, Result, Row};
+use rusqlite::{Result, Row};
+
+use crate::db::MyConnection;
 
 #[derive(Debug)]
 pub struct User {
@@ -39,95 +41,92 @@ pub struct FormAddUser {
     pub password: String,
 }
 
-pub fn add_user<'a>(conn: &'a Connection, user: FormAddUser) -> Result<UserPass> {
-    let napi = bcrypt::hash(format!(
-        "{}+{}",
-        Utc::now().timestamp(),
-        rand::thread_rng().gen::<u64>()
-    ))
-    .unwrap();
+impl MyConnection {
+    pub fn add_user<'a>(&'a self, user: FormAddUser) -> Result<UserPass> {
+        let napi = bcrypt::hash(format!(
+            "{}+{}",
+            Utc::now().timestamp(),
+            rand::thread_rng().gen::<u64>()
+        ))
+        .unwrap();
 
-    conn.execute(
-        "INSERT INTO user (username, password, api_key) VALUES (?1,?2,?3)",
-        (
-            user.username.as_str(),
-            bcrypt::hash(user.password.as_str()).unwrap(),
-            napi.as_str(),
-        ),
-    )?;
+        self.conn.execute(
+            "INSERT INTO user (username, password, api_key) VALUES (?1,?2,?3)",
+            (
+                user.username.as_str(),
+                bcrypt::hash(user.password.as_str()).unwrap(),
+                napi.as_str(),
+            ),
+        )?;
 
-    Ok(UserPass {
-        id: conn.last_insert_rowid(),
-        username: user.username,
-        pass: user.password,
-        api_key: napi,
-    })
-}
+        Ok(UserPass {
+            id: self.conn.last_insert_rowid(),
+            username: user.username,
+            pass: user.password,
+            api_key: napi,
+        })
+    }
 
-pub fn logout<'a>(conn: &'a Connection, user_id: i64) -> Result<usize> {
-    user_update_api_key(conn, "", user_id)
-}
+    pub fn logout<'a>(&'a self, user_id: i64) -> Result<usize> {
+        self.user_update_api_key("", user_id)
+    }
 
-pub fn user_select_id<'a>(conn: &'a Connection, user_id: i64) -> Result<UserPass, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, username, password, api_key FROM user WHERE id = ?1")
-        .map_err(|_| format!("cant prepare"))?;
+    pub fn user_select_id<'a>(&'a self, user_id: i64) -> Result<UserPass, String> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, username, password, api_key FROM user WHERE id = ?1")
+            .map_err(|_| format!("cant prepare"))?;
 
-    let rows = stmt
-        .query_map([user_id], map_user_pass)
-        .map_err(|_| format!("cant querry"))?;
+        let rows = stmt
+            .query_map([user_id], map_user_pass)
+            .map_err(|_| format!("cant querry"))?;
 
-    let mut obduser = None;
-    for usr in rows {
-        if obduser.is_some() {
-            return Err(format!("multiple users with the id {}", user_id));
+        let mut obduser = None;
+        for usr in rows {
+            if obduser.is_some() {
+                return Err(format!("multiple users with the id {}", user_id));
+            }
+            obduser = Some(usr.map_err(|usr| format!("bad user {}", usr.to_string()))?);
         }
-        obduser = Some(usr.map_err(|usr| format!("bad user {}", usr.to_string()))?);
-    }
-    match obduser {
-        Some(obduser) => Ok(obduser),
-        None => Err(format!("no user with the id {}", user_id)),
-    }
-}
-
-pub fn user_select_username<'a, 'b>(
-    conn: &'a Connection,
-    username: &'b str,
-) -> Result<UserPass, String> {
-    let mut stmt = conn
-        .prepare("SELECT id, username, password, api_key FROM user WHERE username = ?1")
-        .map_err(|_| format!("cant prepare"))?;
-
-    let rows = stmt
-        .query_map([username], map_user_pass)
-        .map_err(|_| format!("cant querry"))?;
-
-    let mut obduser = None;
-    for usr in rows {
-        if obduser.is_some() {
-            return Err(format!("multiple users with the username {}", username));
+        match obduser {
+            Some(obduser) => Ok(obduser),
+            None => Err(format!("no user with the id {}", user_id)),
         }
-        obduser = Some(usr.map_err(|usr| format!("bad user {}", usr.to_string()))?);
     }
-    match obduser {
-        Some(obduser) => Ok(obduser),
-        None => Err(format!("no user with the username {}", username)),
-    }
-}
 
-pub fn user_update_api_key<'a, 'b>(
-    conn: &'a Connection,
-    api_key: &'b str,
-    user_id: i64,
-) -> Result<usize> {
-    conn.execute(
-        "
+    pub fn user_select_username<'a, 'b>(&'a self, username: &'b str) -> Result<UserPass, String> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, username, password, api_key FROM user WHERE username = ?1")
+            .map_err(|_| format!("cant prepare"))?;
+
+        let rows = stmt
+            .query_map([username], map_user_pass)
+            .map_err(|_| format!("cant querry"))?;
+
+        let mut obduser = None;
+        for usr in rows {
+            if obduser.is_some() {
+                return Err(format!("multiple users with the username {}", username));
+            }
+            obduser = Some(usr.map_err(|usr| format!("bad user {}", usr.to_string()))?);
+        }
+        match obduser {
+            Some(obduser) => Ok(obduser),
+            None => Err(format!("no user with the username {}", username)),
+        }
+    }
+
+    pub fn user_update_api_key<'a, 'b>(&'a self, api_key: &'b str, user_id: i64) -> Result<usize> {
+        self.conn.execute(
+            "
         UPDATE user
         SET api_key = ?1
         WHERE id = ?2
         ",
-        (api_key, user_id),
-    )
+            (api_key, user_id),
+        )
+    }
 }
 
 fn map_user(row: &Row) -> Result<User> {

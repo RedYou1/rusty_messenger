@@ -1,9 +1,9 @@
 use chrono::Utc;
 use lib::Message;
 use rocket::serde::{Deserialize, Serialize};
-use rusqlite::{Connection, Result, Row};
+use rusqlite::{Result, Row};
 
-use crate::db::DateTimeSql;
+use crate::db::{DateTimeSql, MyConnection};
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
@@ -14,37 +14,39 @@ pub struct FormMessage {
     pub text: String,
 }
 
-pub fn add_message<'a, 'b>(conn: &'a Connection, message: FormMessage) -> Result<Message> {
-    let date = Utc::now();
-    conn.execute(
-        "INSERT INTO message (date, room_id, user_id, text) VALUES (?1, ?2, ?3, ?4)",
-        (
-            date.timestamp(),
-            message.room_id,
-            message.user_id,
-            message.text.to_string(),
-        ),
-    )?;
+impl MyConnection {
+    pub fn add_message<'a, 'b>(&'a self, message: FormMessage) -> Result<Message> {
+        let date = Utc::now();
+        self.conn.execute(
+            "INSERT INTO message (date, room_id, user_id, text) VALUES (?1, ?2, ?3, ?4)",
+            (
+                date.timestamp(),
+                message.room_id,
+                message.user_id,
+                message.text.to_string(),
+            ),
+        )?;
 
-    Ok(Message {
-        date: date,
-        room_id: message.room_id,
-        user_id: message.user_id,
-        text: message.text,
-    })
-}
-
-pub fn load_messages(conn: &Connection, user_id: i64) -> Result<Vec<Message>> {
-    let mut stmt =
-        conn.prepare("SELECT message.date, message.room_id, message.user_id, message.text FROM user_room INNER JOIN message ON message.room_id = user_room.room_id WHERE user_room.user_id = ?1 ORDER BY message.date")?;
-    let rows = stmt.query_map([user_id], map_message)?;
-
-    let mut messages = Vec::new();
-    for message in rows {
-        messages.push(message?);
+        Ok(Message {
+            date: date,
+            room_id: message.room_id,
+            user_id: message.user_id,
+            text: message.text,
+        })
     }
 
-    Ok(messages)
+    pub fn load_messages(&self, user_id: i64) -> Result<Vec<Message>> {
+        let mut stmt =
+        self.conn.prepare("SELECT message.date, message.room_id, message.user_id, message.text FROM user_room INNER JOIN message ON message.room_id = user_room.room_id WHERE user_room.user_id = ?1 ORDER BY message.date")?;
+        let rows = stmt.query_map([user_id], map_message)?;
+
+        let mut messages = Vec::new();
+        for message in rows {
+            messages.push(message?);
+        }
+
+        Ok(messages)
+    }
 }
 
 fn map_message(row: &Row) -> Result<Message> {

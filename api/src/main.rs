@@ -2,14 +2,14 @@
 extern crate rocket;
 
 mod auth;
+mod cors;
 mod db;
 mod message;
 mod room;
 mod user;
 
-use auth::{validate_login, validate_user_key};
-use db::{establish_connection, load_rooms};
-use message::{add_message, load_messages, FormMessage};
+use db::MyConnection;
+use message::FormMessage;
 use rocket::form::Form;
 use rocket::fs::{relative, FileServer};
 use rocket::http::Status;
@@ -18,16 +18,16 @@ use rocket::tokio::select;
 use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
 use rocket::tokio::sync::RwLock;
 use rocket::{Shutdown, State};
-use room::{add_room, add_user_room, select_users_room, FormAddRoom, FormAddUserRoom};
+use room::{FormAddRoom, FormAddUserRoom};
 use std::collections::HashMap;
-use user::{add_user, logout, user_select_id, FormAddUser};
+use user::FormAddUser;
 
 type Convs = RwLock<HashMap<i64, Sender<String>>>;
 
 #[post("/adduser", data = "<form>")]
 fn post_adduser(form: Form<FormAddUser>) -> String {
-    let conn = establish_connection().unwrap();
-    match add_user(&conn, form.into_inner()) {
+    let conn = MyConnection::new().unwrap();
+    match conn.add_user(form.into_inner()) {
         Ok(user) => format!(
             "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"username\": \"{}\", \"api_key\": \"{}\" }}",
             Status::Created.code, user.id, user.username, user.api_key
@@ -42,8 +42,8 @@ fn post_adduser(form: Form<FormAddUser>) -> String {
 
 #[get("/user/<user_id>")]
 fn get_user(user_id: i64) -> String {
-    let conn = establish_connection().unwrap();
-    match user_select_id(&conn, user_id) {
+    let conn = MyConnection::new().unwrap();
+    match conn.user_select_id(user_id) {
         Ok(user) => {
             format!(
             "{{ \"status_code\": {}, \"status\": \"Ok\", \"user_id\": {}, \"username\": \"{}\" }}",
@@ -60,10 +60,10 @@ fn get_user(user_id: i64) -> String {
 
 #[post("/login", data = "<form>")]
 fn post_login(form: Form<FormAddUser>) -> String {
-    let conn = establish_connection().unwrap();
+    let conn = MyConnection::new().unwrap();
     let user = form.into_inner();
 
-    match validate_login(&conn, user.username.as_str(), user.password.as_str()){
+    match conn.validate_login(user.username.as_str(), user.password.as_str()){
         Ok((id, api_key))=>
             format!(
                 "{{ \"status_code\": {}, \"status\": \"Accepted\", \"user_id\": {}, \"api_key\": \"{}\" }}",
@@ -82,11 +82,11 @@ fn post_login(form: Form<FormAddUser>) -> String {
 
 #[post("/room", data = "<form>")]
 async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
-    let conn = establish_connection().unwrap();
+    let conn = MyConnection::new().unwrap();
 
     let inform = form.into_inner();
     let user_id = inform.user_id;
-    let user = match validate_user_key(&conn, inform.user_id, inform.api_key.as_str()) {
+    let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(e) => {
             return format!(
@@ -97,7 +97,7 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
         }
     };
 
-    let room = add_room(&conn, inform).unwrap();
+    let room = conn.add_room(inform).unwrap();
 
     let lock = convs.read().await;
     if let Some(conv) = lock.get(&user_id) {
@@ -121,9 +121,9 @@ async fn get_events(
     convs: &State<Convs>,
     mut end: Shutdown,
 ) -> Result<EventStream![], String> {
-    let conn = establish_connection().unwrap();
+    let conn = MyConnection::new().unwrap();
 
-    let bduser = user_select_id(&conn, user_id)?;
+    let bduser = conn.user_select_id(user_id)?;
     let bdapi_key = bduser.api_key.as_str();
 
     if bdapi_key.eq("") {
@@ -155,8 +155,8 @@ async fn get_events(
         }
     }
 
-    let messages = load_messages(&conn, user_id).unwrap();
-    let rooms = load_rooms(&conn, user_id).unwrap();
+    let messages = conn.load_messages(user_id).unwrap();
+    let rooms = conn.load_rooms(user_id).unwrap();
 
     Ok(EventStream! {
         for rm in rooms {
@@ -170,7 +170,7 @@ async fn get_events(
                 msg = rx.recv() => match msg {
                     Ok(msg) => msg,
                     Err(RecvError::Closed) => {
-                        let _ = logout(&conn, user_id).unwrap();
+                        let _ = conn.logout(user_id).unwrap();
                         break;
                     },
                     Err(RecvError::Lagged(_)) => continue,
@@ -185,11 +185,11 @@ async fn get_events(
 
 #[post("/message", data = "<form>")]
 async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
-    let conn = establish_connection().unwrap();
+    let conn = MyConnection::new().unwrap();
 
     let inform = form.into_inner();
     let room_id = inform.room_id;
-    let user = match validate_user_key(&conn, inform.user_id, inform.api_key.as_str()) {
+    let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(e) => {
             return format!(
@@ -200,12 +200,12 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
         }
     };
 
-    let message = add_message(&conn, inform).unwrap();
+    let message = conn.add_message(inform).unwrap();
     let smessage = message.serialize();
 
     let lock = convs.read().await;
 
-    let users = match select_users_room(&conn, room_id) {
+    let users = match conn.select_users_room(room_id) {
         Ok(users) => users,
         Err(e) => {
             return format!(
@@ -232,10 +232,10 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
 
 #[post("/invite", data = "<form>")]
 async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> String {
-    let conn = establish_connection().unwrap();
+    let conn = MyConnection::new().unwrap();
 
     let inform = form.into_inner();
-    let user = match validate_user_key(&conn, inform.user_id, inform.api_key.as_str()) {
+    let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(e) => {
             return format!(
@@ -246,7 +246,7 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
         }
     };
 
-    let room = match add_user_room(&conn, inform) {
+    let room = match conn.add_user_room(inform) {
         Ok(room) => room,
         Err(e) => {
             return format!(
@@ -261,7 +261,7 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
     if let Some(conv) = lock.get(&room.1) {
         // A send 'fails' if there are no active subscribers. That's okay.
         let _ = conv.send(room.0.serialize());
-        let messages = load_messages(&conn, room.1).unwrap();
+        let messages = conn.load_messages(room.1).unwrap();
         for message in messages {
             let _ = conv.send(message.serialize());
         }
@@ -274,11 +274,10 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
     )
 }
 
-mod cors;
-
 #[launch]
 fn rocket() -> _ {
     let c: Convs = RwLock::new(HashMap::<i64, Sender<String>>::new());
+    MyConnection::new().unwrap().ensure_tables().unwrap();
 
     rocket::build()
         .attach(crate::cors::CORS)
