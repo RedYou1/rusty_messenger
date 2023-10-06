@@ -12,6 +12,7 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
     let name = use_state(cx, || String::new());
+    let error = use_state(cx, || None);
 
     let state = match *source_state.read() {
         SourceState::Error => "error",
@@ -21,7 +22,7 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
 
     let send = move |_| {
         if name.is_empty() {
-            println!("Empty message");
+            error.set(Some(String::from("Empty room name")));
             return;
         }
         let form: HashMap<&str, String>;
@@ -37,17 +38,24 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
 
         let user = user.to_owned();
         let name = name.to_owned();
+        let error = error.to_owned();
         let url = format!("{BASE_API_URL}/room");
         cx.spawn(async move {
-            let res = reqwest::Client::new().post(&url).form(&form).send().await;
-            if res.is_ok() {
-                let r = res.unwrap().text().await.unwrap();
-                let value = json::parse(r.as_str()).unwrap();
-                if value["status_code"].as_u16().unwrap() == 201 {
-                    user.write_silent()
-                        .set_api_key(value["api_key"].as_str().unwrap().to_string());
-                    name.set(String::new());
+            match reqwest::Client::new().post(&url).form(&form).send().await {
+                Ok(res) => {
+                    let r = res.text().await.unwrap();
+                    let value = json::parse(r.as_str()).unwrap();
+                    match value["status_code"].as_u16().unwrap() {
+                        201 => {
+                            user.write_silent()
+                                .set_api_key(value["api_key"].as_str().unwrap().to_string());
+                            error.set(None);
+                            name.set(String::new());
+                        }
+                        _ => error.set(Some(value["reason"].as_str().unwrap().to_string())),
+                    }
                 }
+                Err(_) => error.set(Some(String::from("Request Timeout"))),
             }
         });
     };
@@ -79,6 +87,10 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
                         }
                     }
                 }
+            }
+            match error.as_ref() {
+                Some(e) => render!{span{class:"Error",e.as_str()}},
+                None => render!{span{}}
             }
             form {
                 id: "new-room",

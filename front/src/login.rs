@@ -12,6 +12,7 @@ pub fn LogIn(cx: Scope) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let username = use_state(cx, || String::new());
     let password = use_state(cx, || String::new());
+    let error = use_state(cx, || None);
 
     let userSetter = AsyncStateSetter::<Option<User>>::new(cx, user, |account_manager, user| {
         account_manager.write().set_user(user)
@@ -19,29 +20,40 @@ pub fn LogIn(cx: Scope) -> Element {
 
     let send = move |_| {
         if username.is_empty() {
-            println!("Empty username");
+            error.set(Some(String::from("Empty username")));
             return;
         }
         if password.is_empty() {
-            println!("Empty password");
+            error.set(Some(String::from("Empty password")));
             return;
         }
         let form = serialize_login(username.to_string(), password.to_string());
 
         let url = format!("{BASE_API_URL}/login");
-        let username = username.to_string();
+        let username = username.to_owned();
+        let password = password.to_owned();
+        let error = error.to_owned();
         let userSetter = userSetter.clone();
         cx.spawn(async move {
-            if let Ok(res) = reqwest::Client::new().post(url).form(&form).send().await {
-                let r = res.text().await.unwrap();
-                let value = json::parse(r.as_str()).unwrap();
-                if value["status_code"].as_u16().unwrap() == 202 {
-                    userSetter.set_state(Some(User {
-                        id: value["user_id"].as_i64().unwrap(),
-                        username: username,
-                        api_key: value["api_key"].as_str().unwrap().to_string(),
-                    }))
+            match reqwest::Client::new().post(url).form(&form).send().await {
+                Ok(res) => {
+                    let r = res.text().await.unwrap();
+                    let value = json::parse(r.as_str()).unwrap();
+                    match value["status_code"].as_u16().unwrap() {
+                        202 => {
+                            userSetter.set_state(Some(User {
+                                id: value["user_id"].as_i64().unwrap(),
+                                username: username.to_string(),
+                                api_key: value["api_key"].as_str().unwrap().to_string(),
+                            }));
+                            error.set(None);
+                            username.set(String::new());
+                            password.set(String::new());
+                        }
+                        _ => error.set(Some(value["reason"].as_str().unwrap().to_string())),
+                    }
                 }
+                Err(_) => error.set(Some(String::from("Request Timeout"))),
             }
         });
     };
@@ -54,6 +66,10 @@ pub fn LogIn(cx: Scope) -> Element {
         div{
             id:"login",
             h1{"Login"}
+            match error.as_ref() {
+                Some(e) => render!{span{class:"Error",e.as_str()}},
+                None => render!{span{}}
+            }
             form {
                 id: "login-form",
                 input {

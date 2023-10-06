@@ -48,7 +48,7 @@ impl MyConnection {
             (other.id, form.user_id),
         ) {
             Ok(_) => Ok((room, other.id)),
-            Err(_) => Err(format!("cant prepare")),
+            Err(_) => Err(format!("Can't invite that user.")),
         }
     }
 

@@ -29,12 +29,14 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
 
     let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
+    let error_invite = use_state(cx, || None);
+    let error_message = use_state(cx, || None);
 
     let send_message = move |_| {
         let user_clone = user.to_owned();
         let message_clone = message.to_owned();
         if message_clone.is_empty() {
-            println!("Empty message");
+            error_message.set(Some(String::from("Empty message")));
             return;
         }
         let form: HashMap<&str, String>;
@@ -50,17 +52,24 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         }
 
         let url = format!("{BASE_API_URL}/message");
+        let error = error_message.to_owned();
         cx.spawn(async move {
-            let res = reqwest::Client::new().post(&url).form(&form).send().await;
-            if res.is_ok() {
-                let r = res.unwrap().text().await.unwrap();
-                let value = json::parse(r.as_str()).unwrap();
-                if value["status_code"].as_u16().unwrap() == 201 {
-                    user_clone
-                        .write_silent()
-                        .set_api_key(value["api_key"].as_str().unwrap().to_string());
-                    message_clone.set(String::new());
+            match reqwest::Client::new().post(&url).form(&form).send().await {
+                Ok(res) => {
+                    let r = res.text().await.unwrap();
+                    let value = json::parse(r.as_str()).unwrap();
+                    match value["status_code"].as_u16().unwrap() {
+                        201 => {
+                            user_clone
+                                .write_silent()
+                                .set_api_key(value["api_key"].as_str().unwrap().to_string());
+                            error.set(None);
+                            message_clone.set(String::new());
+                        }
+                        _ => error.set(Some(value["reason"].as_str().unwrap().to_string())),
+                    }
                 }
+                Err(_) => error.set(Some(String::from("Request Timeout"))),
             }
         });
     };
@@ -69,7 +78,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         let user = user.to_owned();
         let username = username.to_owned();
         if username.is_empty() {
-            println!("Empty username");
+            error_invite.set(Some(String::from("Empty username")));
             return;
         }
         let form: HashMap<&str, String>;
@@ -85,16 +94,25 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         }
 
         let url = format!("{BASE_API_URL}/invite");
+        let error_invite = error_invite.to_owned();
         cx.spawn(async move {
-            let res = reqwest::Client::new().post(&url).form(&form).send().await;
-            if res.is_ok() {
-                let r = res.unwrap().text().await.unwrap();
-                let value = json::parse(r.as_str()).unwrap();
-                if value["status_code"].as_u16().unwrap() == 201 {
-                    user.write_silent()
-                        .set_api_key(value["api_key"].as_str().unwrap().to_string());
-                    username.set(String::new());
+            match reqwest::Client::new().post(&url).form(&form).send().await {
+                Ok(res) => {
+                    let r = res.text().await.unwrap();
+                    let value = json::parse(r.as_str()).unwrap();
+                    match value["api_key"].as_str() {
+                        Some(api_key) => user.write_silent().set_api_key(api_key.to_string()),
+                        None => {}
+                    }
+                    match value["status_code"].as_u16().unwrap() {
+                        201 => {
+                            error_invite.set(None);
+                            username.set(String::new());
+                        }
+                        _ => error_invite.set(Some(value["reason"].as_str().unwrap().to_string())),
+                    }
                 }
+                Err(_) => error_invite.set(Some(String::from("Request Timeout"))),
             }
         });
     };
@@ -104,6 +122,10 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         div{
             id:"conv",
             span { room_data.name.as_str() }
+            match error_invite.as_ref() {
+                Some(e) => render!{span{class:"Error",e.as_str()}},
+                None => render!{span{}}
+            }
             form {
                 id: "invite",
                 input {
@@ -135,7 +157,10 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                     },
                 }
             }
-
+            match error_message.as_ref() {
+                Some(e) => render!{span{class:"Error",e.as_str()}},
+                None => render!{span{}}
+            }
             form {
                 id: "new-message",
                 input {

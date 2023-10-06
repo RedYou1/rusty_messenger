@@ -25,6 +25,10 @@ body,
     display: flex;
 }
 
+span.Error {
+    color: red;
+}
+
 a:hover:not(.active),
 button:hover:not(.active),
 .room:hover:not(.active) {

@@ -32,10 +32,10 @@ fn post_adduser(form: Form<FormAddUser>) -> String {
             "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"username\": \"{}\", \"api_key\": \"{}\" }}",
             Status::Created.code, user.id, user.username, user.api_key
         ),
-        Err(e) => format!(
+        Err(_) => format!(
             "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
             Status::Unauthorized.code,
-            e
+            "Username Already Taken"
         ),
     }
 }
@@ -250,8 +250,9 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
         Ok(room) => room,
         Err(e) => {
             return format!(
-                "{{ \"status_code\": {}, \"status\": \"BadRequest\", \"reason\": \"{}\" }}",
+                "{{ \"status_code\": {}, \"status\": \"BadRequest\", \"api_key\": \"{}\", \"reason\": \"{}\" }}",
                 Status::BadRequest.code,
+                user,
                 e
             );
         }
