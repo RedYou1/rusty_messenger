@@ -1,10 +1,12 @@
 use chrono::Local;
 use dioxus::prelude::*;
 use dioxus_router::prelude::use_navigator;
+use dioxus_router::prelude::Link;
 use lib::Message;
 use std::collections::HashMap;
 
 use crate::async_state::AsyncStateSetter;
+use crate::room::OpRoomId;
 use crate::side_bar::SideBar;
 use crate::structs::serialize_message;
 use crate::Rooms;
@@ -118,10 +120,18 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
     };
 
     render! {
-        SideBar{id: *room_id}
+        SideBar{room_id: OpRoomId::from(*room_id) }
         div{
             id:"conv",
-            span { room_data.name.as_str() }
+            div{
+                id: "convHeader",
+                Link{
+                    to: Route::SideBar { room_id: OpRoomId::new_empty() },
+                    "<"
+                }
+                
+                span { room_data.name.as_str() }
+            }
             match error_invite.as_ref() {
                 Some(e) => render!{span{class:"Error",e.as_str()}},
                 None => render!{span{}}

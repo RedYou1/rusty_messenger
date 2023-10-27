@@ -7,7 +7,8 @@ use crate::{
     event_source::SourceState, room::OpRoomId, AccountManager, Rooms, Route, BASE_API_URL,
 };
 
-pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
+#[inline_props]
+pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
     let user = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
@@ -69,6 +70,10 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
     render! {
         div {
             id: "sidebar",
+            class: match cx.props.room_id.as_ref(){
+                Some(Some(_)) => "optional",
+                _ => "",
+            },
             div {
                 id: "status",
                 class: state
@@ -78,8 +83,8 @@ pub fn SideBar(cx: Scope<OpRoomId>) -> Element {
                 for (room_id, room_data) in rooms {
                     li {
                         Link {
-                            class: match cx.props.id {
-                                Some(current_room_id) => if current_room_id == *room_id { class_room_active } else { class_room },
+                            class: match cx.props.room_id.as_ref() {
+                                Some(Some(current_room_id)) => if *current_room_id == *room_id { class_room_active } else { class_room },
                                 _ => class_room
                             },
                             to: Route::Conv{ room_id: *room_id },

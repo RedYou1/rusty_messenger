@@ -44,6 +44,12 @@ button:hover:not(.active),
     background-color: var(--bg-light);
 }
 
+@media (max-width: 1000px) {
+    #sidebar.optional {
+        display: none;
+    }
+}
+
 #rooms {
     display: flex;
     flex-direction: column;
@@ -76,6 +82,13 @@ button:hover:not(.active),
     overflow: auto;
     display: flex;
     flex-direction: column;
+}
+
+#convHeader{
+    display: flex;
+    flex-direction: row;
+    overflow: auto;
+    gap: 5px;
 }
 
 #createuser {

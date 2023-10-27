@@ -11,12 +11,12 @@ mod room;
 mod side_bar;
 mod structs;
 
-pub const BASE_API_URL: &'static str = "http://172.19.67.102:8000";
+pub const BASE_API_URL: &'static str = "http://192.168.137.1:8000";
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use lib::{Message, Room};
-use room::RoomData;
+use room::{RoomData, OpRoomId};
 use std::collections::HashMap;
 
 use crate::account_manager::AccountManager;
@@ -26,6 +26,7 @@ use crate::create_user::CreateUser;
 use crate::event_source::SourceState;
 use crate::home::Home;
 use crate::login::LogIn;
+use crate::side_bar::SideBar;
 
 #[derive(Routable, Clone)]
 #[rustfmt::skip]
@@ -38,6 +39,8 @@ pub enum Route {
     CreateUser {},
     #[route("/:room_id")]
     Conv { room_id: i64 },
+    #[route("/rooms?:room_id")]
+    SideBar { room_id: OpRoomId },
     #[route("/:..route")]
     PageNotFound { route: Vec<String> },
 }

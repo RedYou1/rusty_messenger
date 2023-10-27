@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::Link;
+use dioxus_router::prelude::{use_navigator, Link};
 
 use crate::async_state::AsyncStateSetter;
-use crate::side_bar::SideBar;
+use crate::room::OpRoomId;
 use crate::structs::{serialize_login, User};
 use crate::BASE_API_URL;
 use crate::{AccountManager, Route};
@@ -18,6 +18,8 @@ pub fn LogIn(cx: Scope) -> Element {
         account_manager.write().set_user(user)
     });
 
+    let nav = use_navigator(cx);
+
     let send = move |_| {
         if username.is_empty() {
             error.set(Some(String::from("Empty username")));
@@ -31,9 +33,9 @@ pub fn LogIn(cx: Scope) -> Element {
 
         let url = format!("{BASE_API_URL}/login");
         let username = username.to_owned();
-        let password = password.to_owned();
         let error = error.to_owned();
         let userSetter = userSetter.clone();
+        let nav = nav.to_owned();
         cx.spawn(async move {
             match reqwest::Client::new().post(url).form(&form).send().await {
                 Ok(res) => {
@@ -46,9 +48,9 @@ pub fn LogIn(cx: Scope) -> Element {
                                 username: username.to_string(),
                                 api_key: value["api_key"].as_str().unwrap().to_string(),
                             }));
-                            error.set(None);
-                            username.set(String::new());
-                            password.set(String::new());
+                            nav.replace(Route::SideBar {
+                                room_id: OpRoomId::new_empty(),
+                            });
                         }
                         _ => error.set(Some(value["reason"].as_str().unwrap().to_string())),
                     }
@@ -59,10 +61,6 @@ pub fn LogIn(cx: Scope) -> Element {
     };
 
     render! {
-        match user.read().user() {
-            Some(_) => render!{SideBar{}},
-            None => render!{div{}}
-        }
         div{
             id:"login",
             h1{"Login"}
