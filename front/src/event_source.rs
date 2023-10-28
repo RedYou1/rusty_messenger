@@ -4,7 +4,7 @@ use web_sys::{Event, EventSource, MessageEvent};
 
 use crate::{async_state::AsyncStateSetter, BASE_API_URL};
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum SourceState {
     Error = 0b000,
     ReConnecting = 0b01,

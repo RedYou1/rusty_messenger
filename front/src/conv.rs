@@ -8,11 +8,11 @@ use std::collections::HashMap;
 use crate::async_state::AsyncStateSetter;
 use crate::room::OpRoomId;
 use crate::side_bar::SideBar;
-use crate::structs::serialize_message;
 use crate::Rooms;
 use crate::Route;
 use crate::BASE_API_URL;
 use crate::{AccountManager, Users};
+use lib::serialize_message;
 
 #[inline_props]
 pub fn Conv(cx: Scope, room_id: i64) -> Element {

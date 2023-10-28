@@ -21,6 +21,7 @@ pub struct UserPass {
 }
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
 #[serde(crate = "rocket::serde")]
 pub struct AuthKey {
     pub user_id: i64,
@@ -28,6 +29,7 @@ pub struct AuthKey {
 }
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
 #[serde(crate = "rocket::serde")]
 pub struct AuthPass {
     pub user_id: i64,
@@ -35,6 +37,7 @@ pub struct AuthPass {
 }
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
 #[serde(crate = "rocket::serde")]
 pub struct FormAddUser {
     pub username: String,
@@ -42,7 +45,7 @@ pub struct FormAddUser {
 }
 
 impl MyConnection {
-    pub fn add_user<'a>(&'a self, user: FormAddUser) -> Result<UserPass> {
+    pub fn add_user<'a>(&'a self, user: FormAddUser) -> Result<AuthKey> {
         let napi = bcrypt::hash(format!(
             "{}+{}",
             Utc::now().timestamp(),
@@ -59,10 +62,8 @@ impl MyConnection {
             ),
         )?;
 
-        Ok(UserPass {
-            id: self.conn.last_insert_rowid(),
-            username: user.username,
-            pass: user.password,
+        Ok(AuthKey {
+            user_id: self.conn.last_insert_rowid(),
             api_key: napi,
         })
     }

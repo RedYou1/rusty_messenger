@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate rocket;
 
+#[cfg(test)]
+mod tests;
+
 mod auth;
 mod cors;
 mod db;
@@ -17,7 +20,7 @@ use rocket::response::stream::{Event, EventStream};
 use rocket::tokio::select;
 use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
 use rocket::tokio::sync::RwLock;
-use rocket::{Shutdown, State};
+use rocket::{Build, Rocket, Shutdown, State};
 use room::{FormAddRoom, FormAddUserRoom};
 use std::collections::HashMap;
 use user::FormAddUser;
@@ -26,11 +29,11 @@ type Convs = RwLock<HashMap<i64, Sender<String>>>;
 
 #[post("/adduser", data = "<form>")]
 fn post_adduser(form: Form<FormAddUser>) -> String {
-    let conn = MyConnection::new().unwrap();
+    let conn = connection();
     match conn.add_user(form.into_inner()) {
         Ok(user) => format!(
-            "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"username\": \"{}\", \"api_key\": \"{}\" }}",
-            Status::Created.code, user.id, user.username, user.api_key
+            "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"api_key\": \"{}\" }}",
+            Status::Created.code, user.user_id, user.api_key
         ),
         Err(_) => format!(
             "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
@@ -42,7 +45,7 @@ fn post_adduser(form: Form<FormAddUser>) -> String {
 
 #[get("/user/<user_id>")]
 fn get_user(user_id: i64) -> String {
-    let conn = MyConnection::new().unwrap();
+    let conn = connection();
     match conn.user_select_id(user_id) {
         Ok(user) => {
             format!(
@@ -60,7 +63,7 @@ fn get_user(user_id: i64) -> String {
 
 #[post("/login", data = "<form>")]
 fn post_login(form: Form<FormAddUser>) -> String {
-    let conn = MyConnection::new().unwrap();
+    let conn = connection();
     let user = form.into_inner();
 
     match conn.validate_login(user.username.as_str(), user.password.as_str()){
@@ -82,7 +85,7 @@ fn post_login(form: Form<FormAddUser>) -> String {
 
 #[post("/room", data = "<form>")]
 async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
-    let conn = MyConnection::new().unwrap();
+    let conn = connection();
 
     let inform = form.into_inner();
     let user_id = inform.user_id;
@@ -121,7 +124,7 @@ async fn get_events(
     convs: &State<Convs>,
     mut end: Shutdown,
 ) -> Result<EventStream![], String> {
-    let conn = MyConnection::new().unwrap();
+    let conn = connection();
 
     let bduser = conn.user_select_id(user_id)?;
     let bdapi_key = bduser.api_key.as_str();
@@ -185,7 +188,7 @@ async fn get_events(
 
 #[post("/message", data = "<form>")]
 async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
-    let conn = MyConnection::new().unwrap();
+    let conn = connection();
 
     let inform = form.into_inner();
     let room_id = inform.room_id;
@@ -232,7 +235,7 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
 
 #[post("/invite", data = "<form>")]
 async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> String {
-    let conn = MyConnection::new().unwrap();
+    let conn = connection();
 
     let inform = form.into_inner();
     let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
@@ -275,10 +278,17 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
     )
 }
 
-#[launch]
-fn rocket() -> _ {
+static mut TEST: bool = false;
+fn connection() -> MyConnection {
+    unsafe { MyConnection::new(TEST).unwrap() }
+}
+
+pub fn build(test: bool) -> Rocket<Build> {
     let c: Convs = RwLock::new(HashMap::<i64, Sender<String>>::new());
-    MyConnection::new().unwrap().ensure_tables().unwrap();
+    unsafe {
+        TEST = test;
+    }
+    connection().ensure_tables().unwrap();
 
     rocket::build()
         .attach(crate::cors::CORS)
@@ -296,4 +306,9 @@ fn rocket() -> _ {
             ],
         )
         .mount("/", FileServer::from(relative!("static")))
+}
+
+#[launch]
+fn rocket() -> _ {
+    build(false)
 }

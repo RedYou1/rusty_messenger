@@ -6,6 +6,7 @@ use rusqlite::{Result, Row};
 use crate::db::{DateTimeSql, MyConnection};
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
 #[serde(crate = "rocket::serde")]
 pub struct FormMessage {
     pub user_id: i64,

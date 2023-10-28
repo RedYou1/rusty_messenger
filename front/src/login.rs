@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
 use dioxus_router::prelude::{use_navigator, Link};
+use lib::serialize_login;
 
 use crate::async_state::AsyncStateSetter;
 use crate::room::OpRoomId;
-use crate::structs::{serialize_login, User};
+use crate::structs::User;
 use crate::BASE_API_URL;
 use crate::{AccountManager, Route};
 

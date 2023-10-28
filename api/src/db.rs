@@ -67,21 +67,26 @@ pub struct MyConnection {
 static mut DATABASE_URL: String = String::new();
 static INIT: Once = Once::new();
 
-fn database_url() -> &'static String {
+fn database_url(test: bool) -> &'static String {
     unsafe {
         INIT.call_once(|| {
             dotenv().expect("not .env");
-            DATABASE_URL = env::var("DATABASE_URL").expect("DATABASE_URL must be set")
+            let path = match test {
+                false => "DATABASE_URL",
+                true => "DATABASE_URL_TEST",
+            };
+            let error_message = format!("{} must be set", path);
+            DATABASE_URL = env::var(path).expect(error_message.as_str());
         });
         &DATABASE_URL
     }
 }
 
 impl MyConnection {
-    pub fn new() -> Result<MyConnection> {
+    pub fn new(test: bool) -> Result<MyConnection> {
         Ok(MyConnection {
             _private: (),
-            conn: Connection::open(database_url())?,
+            conn: Connection::open(database_url(test))?,
         })
     }
 

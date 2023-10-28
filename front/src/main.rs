@@ -16,7 +16,7 @@ pub const BASE_API_URL: &'static str = "http://192.168.137.1:8000";
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 use lib::{Message, Room};
-use room::{RoomData, OpRoomId};
+use room::{OpRoomId, RoomData};
 use std::collections::HashMap;
 
 use crate::account_manager::AccountManager;
