@@ -2,6 +2,8 @@
 extern crate rocket;
 
 #[cfg(test)]
+mod test_event_stream;
+#[cfg(test)]
 mod tests;
 
 mod auth;

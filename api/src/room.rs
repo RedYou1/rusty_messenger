@@ -5,6 +5,7 @@ use rusqlite::{Result, Row};
 use crate::db::MyConnection;
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
 #[serde(crate = "rocket::serde")]
 pub struct FormAddRoom {
     pub user_id: i64,
@@ -13,6 +14,7 @@ pub struct FormAddRoom {
 }
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
+#[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
 #[serde(crate = "rocket::serde")]
 pub struct FormAddUserRoom {
     pub user_id: i64,

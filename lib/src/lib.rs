@@ -80,6 +80,7 @@ impl EventMessageId {
     }
 }
 
+#[derive(Debug)]
 pub enum EventMessage {
     Room(Room),
     Message(Message),

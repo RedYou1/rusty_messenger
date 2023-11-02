@@ -1,14 +1,26 @@
+use chrono::Utc;
 use dotenv::dotenv;
 use json::JsonValue;
+use lib::{EventMessage, Message, Room};
 use rocket::http::uri::fmt::{Query, UriDisplay};
 use rocket::http::ContentType;
 use rocket::local::asynchronous::{Client, LocalResponse};
 use std::sync::Once;
 use std::{env, fs};
 
+use crate::test_event_stream::listen_events;
 use crate::user::UserPass;
 
 use super::*;
+
+static mut ROOMID: i64 = 0;
+
+pub fn next_room_id() -> i64 {
+    unsafe {
+        ROOMID += 1;
+        ROOMID
+    }
+}
 
 #[async_test]
 async fn test_login() {
@@ -29,7 +41,7 @@ async fn test_login() {
     let past_user = add_user(&client, &user1)
         .await
         .expect("The user test1 shouldn't exists");
-    let user = login(&client, &user1)
+    let mut user = login(&client, &user1)
         .await
         .expect("The user test1 should exists");
     assert_eq!(past_user.id, user.id);
@@ -40,6 +52,61 @@ async fn test_login() {
             .await
             .expect("The user test1 should exists")
     );
+
+    let room = user
+        .addroom(&client, String::from("Room #1"))
+        .await
+        .expect("can't create Room #1");
+
+    let mut user_events = listen_events(&client, &user).await;
+    user_events
+        .test_next(EventMessage::Room(room.clone()))
+        .await;
+
+    let message = user
+        .addmessage(&client, room.id, String::from("Salut"))
+        .await
+        .expect("can't send message");
+    user_events
+        .test_next(EventMessage::Message(message.clone()))
+        .await;
+
+    let mut user2 = add_user(
+        &client,
+        &FormAddUser {
+            username: "test2".to_string(),
+            password: "test2".to_string(),
+        },
+    )
+    .await
+    .expect("The user test2 should exists");
+    assert_eq!(
+        user2.username,
+        get_user(&client, user2.id)
+            .await
+            .expect("The user test2 should exists")
+    );
+
+    user.invite(&client, user2.username.to_string(), room.id)
+        .await
+        .expect("can't invite");
+
+    let mut user2_events = listen_events(&client, &user2).await;
+    user2_events
+        .test_next(EventMessage::Room(room.clone()))
+        .await;
+    user2_events.test_next(EventMessage::Message(message)).await;
+
+    let message2 = user2
+        .addmessage(&client, room.id, String::from("Bonjour"))
+        .await
+        .expect("can't send message");
+    user_events
+        .test_next(EventMessage::Message(message2.clone()))
+        .await;
+    user2_events
+        .test_next(EventMessage::Message(message2))
+        .await;
 }
 
 static INIT: Once = Once::new();
@@ -101,6 +168,102 @@ async fn login<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPass, 
             api_key: result["api_key"].as_str().unwrap().to_string(),
         }),
         _ => Err(result["reason"].as_str().unwrap().to_string()),
+    }
+}
+
+impl UserPass {
+    async fn addroom<'c>(&mut self, client: &'c Client, name: String) -> Result<Room, String> {
+        let room = FormAddRoom {
+            user_id: self.id,
+            api_key: self.api_key.to_string(),
+            name: name,
+        };
+        let result = into_json(
+            client
+                .post(uri!(post_addroom))
+                .header(ContentType::Form)
+                .body((&room as &dyn UriDisplay<Query>).to_string())
+                .dispatch()
+                .await,
+        )
+        .await;
+        match result["status_code"].as_u16().unwrap() {
+            201 => {
+                self.api_key = result["api_key"].as_str().unwrap().to_string();
+                Ok(Room {
+                    id: next_room_id(),
+                    name: room.name.to_string(),
+                })
+            }
+            _ => Err(result["reason"].as_str().unwrap().to_string()),
+        }
+    }
+
+    async fn invite<'c>(
+        &mut self,
+        client: &'c Client,
+        other_user: String,
+        room: i64,
+    ) -> Result<(), String> {
+        let room = FormAddUserRoom {
+            user_id: self.id,
+            api_key: self.api_key.to_string(),
+            user_other: other_user,
+            room_id: room,
+        };
+        let result = into_json(
+            client
+                .post(uri!(post_invite))
+                .header(ContentType::Form)
+                .body((&room as &dyn UriDisplay<Query>).to_string())
+                .dispatch()
+                .await,
+        )
+        .await;
+        match result["api_key"].as_str() {
+            Some(api_key) => self.api_key = api_key.to_string(),
+            None => {}
+        }
+        match result["status_code"].as_u16().unwrap() {
+            201 => Ok(()),
+            _ => Err(result["reason"].as_str().unwrap().to_string()),
+        }
+    }
+
+    async fn addmessage<'c>(
+        &mut self,
+        client: &'c Client,
+        room_id: i64,
+        text: String,
+    ) -> Result<Message, String> {
+        let message = FormMessage {
+            user_id: self.id,
+            api_key: self.api_key.to_string(),
+            room_id: room_id,
+            text: text,
+        };
+        let result = into_json(
+            client
+                .post(uri!(post_message))
+                .header(ContentType::Form)
+                .body((&message as &dyn UriDisplay<Query>).to_string())
+                .dispatch()
+                .await,
+        )
+        .await;
+        match result["api_key"].as_str() {
+            Some(api_key) => self.api_key = api_key.to_string(),
+            None => {}
+        }
+        match result["status_code"].as_u16().unwrap() {
+            201 => Ok(Message {
+                date: Utc::now(),
+                room_id: message.room_id,
+                user_id: message.user_id,
+                text: message.text.to_string(),
+            }),
+            _ => Err(result["reason"].as_str().unwrap().to_string()),
+        }
     }
 }
 
