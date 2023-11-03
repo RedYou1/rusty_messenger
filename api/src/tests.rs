@@ -23,50 +23,101 @@ pub fn next_room_id() -> i64 {
 }
 
 #[async_test]
+async fn test_adduser() {
+    initialize();
+    let client = Client::tracked(build(true)).await.unwrap();
+    let form_user = FormAddUser {
+        username: "test_adduser".to_string(),
+        password: "test_adduser".to_string(),
+    };
+    let user = add_user(&client, &form_user).await.unwrap();
+    assert_eq!(user.username, "test_adduser");
+    assert_eq!(user.pass, "test_adduser");
+    assert_eq!(
+        add_user(&client, &form_user).await.unwrap_err(),
+        "Username Already Taken"
+    );
+}
+
+#[async_test]
 async fn test_login() {
     initialize();
-
     let client = Client::tracked(build(true)).await.unwrap();
 
-    let user1 = FormAddUser {
-        username: "test1".to_string(),
-        password: "test1".to_string(),
+    let form_user = FormAddUser {
+        username: "test_login".to_string(),
+        password: "test_login".to_string(),
     };
     assert_eq!(
-        login(&client, &user1)
+        login(&client, &form_user)
             .await
-            .expect_err("The user test1 shouldn't exists"),
-        "no user with the username test1"
+            .unwrap_err(),
+        "bad username or password"
     );
-    let past_user = add_user(&client, &user1)
+    let add_user = add_user(&client, &form_user)
         .await
-        .expect("The user test1 shouldn't exists");
+        .unwrap();
     let failed_user = FormAddUser {
-        username: "test1".to_string(),
-        password: "testX".to_string(),
+        username: "test_login".to_string(),
+        password: "Wrong password".to_string(),
     };
     assert_eq!(
         login(&client, &failed_user)
             .await
-            .expect_err("Wrong password"),
+            .unwrap_err(),
         "bad username or password"
     );
-    let mut user = login(&client, &user1)
+    let user = login(&client, &form_user)
         .await
-        .expect("The user test1 should exists");
-    assert_eq!(past_user.id, user.id);
-    assert_ne!(past_user.api_key, user.api_key);
+        .unwrap();
+    assert_eq!(add_user.id, user.id);
+    assert_ne!(add_user.api_key, user.api_key);
     assert_eq!(
         user.username,
         get_user(&client, user.id)
             .await
-            .expect("The user test1 should exists")
+            .unwrap()
     );
+}
 
-    let room = user
+#[async_test]
+async fn test_room() {
+    initialize();
+    let client = Client::tracked(build(true)).await.unwrap();
+
+    assert_eq!(
+        UserPass {
+            id: 100,
+            username: "test_room".to_string(),
+            pass: "test_room".to_string(),
+            api_key: "no key".to_string(),
+        }
         .addroom(&client, String::from("Room #1"))
         .await
-        .expect("can't create Room #1");
+        .unwrap_err(),
+        "bad user id or api key"
+    );
+}
+
+#[async_test]
+async fn test_base() {
+    initialize();
+    let client = Client::tracked(build(true)).await.unwrap();
+
+    let mut user_1 = add_user(
+        &client,
+        &FormAddUser {
+            username: "test_event_1".to_string(),
+            password: "test_event_1".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let room = user_1
+        .addroom(&client, String::from("Room #1"))
+        .await
+        .unwrap();
 
     match listen_events(
         &client,
@@ -87,53 +138,56 @@ async fn test_login() {
         }
     };
 
-    let mut user_events = listen_events(&client, &user).await.unwrap();
-    user_events
+    let mut user_1_events = listen_events(&client, &user_1).await.unwrap();
+    user_1_events
         .test_next(EventMessage::Room(room.clone()))
         .await;
 
-    let message = user
+    let message = user_1
         .addmessage(&client, room.id, String::from("Salut"))
         .await
-        .expect("can't send message");
-    user_events
+        .unwrap();
+    user_1_events
         .test_next(EventMessage::Message(message.clone()))
         .await;
 
-    let mut user2 = add_user(
+    let mut user_2 = add_user(
         &client,
         &FormAddUser {
-            username: "test2".to_string(),
-            password: "test2".to_string(),
+            username: "test_event_2".to_string(),
+            password: "test_event_2".to_string(),
         },
     )
     .await
-    .expect("The user test2 should exists");
+    .unwrap();
     assert_eq!(
-        user2.username,
-        get_user(&client, user2.id)
+        user_2.username,
+        get_user(&client, user_2.id)
             .await
-            .expect("The user test2 should exists")
+            .unwrap()
     );
 
-    user.invite(&client, user2.username.to_string(), room.id)
+    user_1
+        .invite(&client, user_2.username.to_string(), room.id)
         .await
-        .expect("can't invite");
+        .unwrap();
 
-    let mut user2_events = listen_events(&client, &user2).await.unwrap();
-    user2_events
+    let mut user_2_events = listen_events(&client, &user_2).await.unwrap();
+    user_2_events
         .test_next(EventMessage::Room(room.clone()))
         .await;
-    user2_events.test_next(EventMessage::Message(message)).await;
+    user_2_events
+        .test_next(EventMessage::Message(message))
+        .await;
 
-    let message2 = user2
+    let message2 = user_2
         .addmessage(&client, room.id, String::from("Bonjour"))
         .await
-        .expect("can't send message");
-    user_events
+        .unwrap();
+    user_1_events
         .test_next(EventMessage::Message(message2.clone()))
         .await;
-    user2_events
+    user_2_events
         .test_next(EventMessage::Message(message2))
         .await;
 }
@@ -142,10 +196,10 @@ static INIT: Once = Once::new();
 
 pub fn initialize() {
     INIT.call_once(|| {
-        dotenv().expect("not .env");
-        let database_url = env::var("DATABASE_URL_TEST").expect("DATABASE_URL_TEST must be set");
+        dotenv().unwrap();
+        let database_url = env::var("DATABASE_URL_TEST").unwrap();
         if fs::metadata(database_url.clone()).is_ok() {
-            fs::remove_file(database_url).expect("can't remove bd");
+            fs::remove_file(database_url).unwrap();
         }
     });
 }

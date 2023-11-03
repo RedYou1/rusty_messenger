@@ -47,7 +47,7 @@ impl MyConnection {
 
         match self.conn.execute(
             "INSERT INTO user_room (user_id, room_id) VALUES (?1, ?2)",
-            (other.id, form.user_id),
+            (other.id, form.room_id),
         ) {
             Ok(_) => Ok((room, other.id)),
             Err(_) => Err(format!("Can't invite that user.")),

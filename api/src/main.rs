@@ -41,8 +41,6 @@ enum ApiResponse {
     BadRequest(String),
     #[response(status = 401, content_type = "json")]
     Unauthorized(String),
-    #[response(status = 500, content_type = "json")]
-    InternalServerError(String),
 }
 
 #[post("/adduser", data = "<form>")]
@@ -53,10 +51,9 @@ fn post_adduser(form: Form<FormAddUser>) -> ApiResponse {
             "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
             user.user_id, user.api_key
         )),
-        Err(_) => ApiResponse::Unauthorized(format!(
-            "{{ \"reason\": \"{}\" }}",
-            "Username Already Taken"
-        )),
+        Err(_) => {
+            ApiResponse::Unauthorized(String::from("{ \"reason\": \"Username Already Taken\" }"))
+        }
     }
 }
 
@@ -68,7 +65,7 @@ fn get_user(user_id: i64) -> ApiResponse {
             "{{ \"user_id\": {}, \"username\": \"{}\" }}",
             user.id, user.username
         )),
-        Err(e) => ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e)),
+        Err(_) => ApiResponse::BadRequest(String::from("{ \"reason\": \"bad user id\" }")),
     }
 }
 
@@ -82,7 +79,9 @@ fn post_login(form: Form<FormAddUser>) -> ApiResponse {
             "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
             id, api_key
         )),
-        Err(r) => ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", r)),
+        Err(_) => {
+            ApiResponse::Unauthorized(String::from("{ \"reason\": \"bad username or password\" }"))
+        }
     }
 }
 
@@ -94,8 +93,10 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiRespo
     let user_id = inform.user_id;
     let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
-        Err(e) => {
-            return ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e));
+        Err(_) => {
+            return ApiResponse::Unauthorized(String::from(
+                "{ \"reason\": \"bad user id or api key\" }",
+            ));
         }
     };
 
@@ -131,16 +132,16 @@ async fn get_events(
 
     let bduser = match conn.user_select_id(user_id) {
         Ok(bduser) => bduser,
-        Err(_) => return ApiResponseEvents::Unauthorized("bad user id or api key".to_string()),
+        Err(_) => return ApiResponseEvents::Unauthorized(String::from("bad user id or api key")),
     };
     let bdapi_key = bduser.api_key.as_str();
 
     if bdapi_key.eq("") {
-        return ApiResponseEvents::Unauthorized("bad user id or api key".to_string());
+        return ApiResponseEvents::Unauthorized(String::from("bad user id or api key"));
     }
 
     if !bdapi_key.eq(api_key.as_str()) {
-        return ApiResponseEvents::Unauthorized("bad user id or api key".to_string());
+        return ApiResponseEvents::Unauthorized(String::from("bad user id or api key"));
     }
 
     let mut rx;
@@ -200,8 +201,10 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiRespo
     let room_id = inform.room_id;
     let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
-        Err(e) => {
-            return ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e));
+        Err(_) => {
+            return ApiResponse::Unauthorized(String::from(
+                "{ \"reason\": \"bad user id or api key\" }",
+            ));
         }
     };
 
@@ -212,8 +215,8 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiRespo
 
     let users = match conn.select_users_room(room_id) {
         Ok(users) => users,
-        Err(e) => {
-            return ApiResponse::InternalServerError(format!("{{ \"reason\": \"{}\" }}", e));
+        Err(_) => {
+            return ApiResponse::BadRequest(String::from("{ \"reason\": \"room doesnt exists\" }"))
         }
     };
 
@@ -234,8 +237,10 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> ApiRe
     let inform = form.into_inner();
     let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
-        Err(e) => {
-            return ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e));
+        Err(_) => {
+            return ApiResponse::Unauthorized(String::from(
+                "{ \"reason\": \"bad user id or api key\" }",
+            ));
         }
     };
 

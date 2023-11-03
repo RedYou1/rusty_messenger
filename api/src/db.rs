@@ -70,13 +70,13 @@ static INIT: Once = Once::new();
 fn database_url(test: bool) -> &'static String {
     unsafe {
         INIT.call_once(|| {
-            dotenv().expect("not .env");
+            dotenv().unwrap();
             let path = match test {
                 false => "DATABASE_URL",
                 true => "DATABASE_URL_TEST",
             };
             let error_message = format!("{} must be set", path);
-            DATABASE_URL = env::var(path).expect(error_message.as_str());
+            DATABASE_URL = env::var(path).unwrap();
         });
         &DATABASE_URL
     }
@@ -117,9 +117,7 @@ impl MyConnection {
                 user_id INTEGER NOT NULL,
                 text TEXT NOT NULL,
     
-                UNIQUE(room_id, user_id, date),
-                FOREIGN KEY(user_id) REFERENCES user(id) ON DELETE CASCADE,
-                FOREIGN KEY(room_id) REFERENCES room(id) ON DELETE CASCADE
+                FOREIGN KEY(user_id, room_id) REFERENCES user_room(user_id, room_id) ON DELETE CASCADE
             );
     
             CREATE TABLE IF NOT EXISTS user_room
