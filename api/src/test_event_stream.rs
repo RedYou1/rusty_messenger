@@ -68,7 +68,10 @@ impl<'a> TestEventStream<'a> {
     }
 }
 
-pub async fn listen_events<'c>(client: &'c Client, user: &UserPass) -> TestEventStream<'c> {
+pub async fn listen_events<'c>(
+    client: &'c Client,
+    user: &UserPass,
+) -> Result<TestEventStream<'c>, String> {
     let response = client
         .get(format!(
             "/events/{}?api_key={}",
@@ -78,8 +81,11 @@ pub async fn listen_events<'c>(client: &'c Client, user: &UserPass) -> TestEvent
         .dispatch()
         .await;
 
-    TestEventStream {
-        username: user.username.to_string(),
-        stream: BufReader::new(response).lines(),
+    match response.status().code {
+        200 => Ok(TestEventStream {
+            username: user.username.to_string(),
+            stream: BufReader::new(response).lines(),
+        }),
+        _ => Err(response.into_string().await.unwrap()),
     }
 }

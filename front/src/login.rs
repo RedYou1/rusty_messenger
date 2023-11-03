@@ -40,9 +40,10 @@ pub fn LogIn(cx: Scope) -> Element {
         cx.spawn(async move {
             match reqwest::Client::new().post(url).form(&form).send().await {
                 Ok(res) => {
+                    let status = res.status().as_u16();
                     let r = res.text().await.unwrap();
                     let value = json::parse(r.as_str()).unwrap();
-                    match value["status_code"].as_u16().unwrap() {
+                    match status {
                         202 => {
                             userSetter.set_state(Some(User {
                                 id: value["user_id"].as_i64().unwrap(),

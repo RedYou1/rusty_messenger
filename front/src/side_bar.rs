@@ -44,9 +44,10 @@ pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
         cx.spawn(async move {
             match reqwest::Client::new().post(&url).form(&form).send().await {
                 Ok(res) => {
+                    let status = res.status().as_u16();
                     let r = res.text().await.unwrap();
                     let value = json::parse(r.as_str()).unwrap();
-                    match value["status_code"].as_u16().unwrap() {
+                    match status {
                         201 => {
                             user.write_silent()
                                 .set_api_key(value["api_key"].as_str().unwrap().to_string());

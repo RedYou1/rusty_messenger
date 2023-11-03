@@ -17,8 +17,8 @@ use db::MyConnection;
 use message::FormMessage;
 use rocket::form::Form;
 use rocket::fs::{relative, FileServer};
-use rocket::http::Status;
 use rocket::response::stream::{Event, EventStream};
+use rocket::response::Responder;
 use rocket::tokio::select;
 use rocket::tokio::sync::broadcast::{channel, error::RecvError, Sender};
 use rocket::tokio::sync::RwLock;
@@ -29,64 +29,65 @@ use user::FormAddUser;
 
 type Convs = RwLock<HashMap<i64, Sender<String>>>;
 
+#[derive(Debug, Responder)]
+enum ApiResponse {
+    #[response(status = 200, content_type = "json")]
+    Ok(String),
+    #[response(status = 201, content_type = "json")]
+    Created(String),
+    #[response(status = 202, content_type = "json")]
+    Accepted(String),
+    #[response(status = 400, content_type = "json")]
+    BadRequest(String),
+    #[response(status = 401, content_type = "json")]
+    Unauthorized(String),
+    #[response(status = 500, content_type = "json")]
+    InternalServerError(String),
+}
+
 #[post("/adduser", data = "<form>")]
-fn post_adduser(form: Form<FormAddUser>) -> String {
+fn post_adduser(form: Form<FormAddUser>) -> ApiResponse {
     let conn = connection();
     match conn.add_user(form.into_inner()) {
-        Ok(user) => format!(
-            "{{ \"status_code\": {}, \"status\": \"Created\", \"user_id\": {}, \"api_key\": \"{}\" }}",
-            Status::Created.code, user.user_id, user.api_key
-        ),
-        Err(_) => format!(
-            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-            Status::Unauthorized.code,
+        Ok(user) => ApiResponse::Created(format!(
+            "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
+            user.user_id, user.api_key
+        )),
+        Err(_) => ApiResponse::Unauthorized(format!(
+            "{{ \"reason\": \"{}\" }}",
             "Username Already Taken"
-        ),
+        )),
     }
 }
 
 #[get("/user/<user_id>")]
-fn get_user(user_id: i64) -> String {
+fn get_user(user_id: i64) -> ApiResponse {
     let conn = connection();
     match conn.user_select_id(user_id) {
-        Ok(user) => {
-            format!(
-            "{{ \"status_code\": {}, \"status\": \"Ok\", \"user_id\": {}, \"username\": \"{}\" }}",
-            Status::Ok.code, user.id, user.username
-        )
-        }
-        Err(e) => format!(
-            "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-            Status::Unauthorized.code,
-            e
-        ),
+        Ok(user) => ApiResponse::Ok(format!(
+            "{{ \"user_id\": {}, \"username\": \"{}\" }}",
+            user.id, user.username
+        )),
+        Err(e) => ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e)),
     }
 }
 
 #[post("/login", data = "<form>")]
-fn post_login(form: Form<FormAddUser>) -> String {
+fn post_login(form: Form<FormAddUser>) -> ApiResponse {
     let conn = connection();
     let user = form.into_inner();
 
-    match conn.validate_login(user.username.as_str(), user.password.as_str()){
-        Ok((id, api_key))=>
-            format!(
-                "{{ \"status_code\": {}, \"status\": \"Accepted\", \"user_id\": {}, \"api_key\": \"{}\" }}",
-                Status::Accepted.code,
-                id,
-                api_key
-            ),
-        Err(r)=>
-            format!(
-                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-                Status::Unauthorized.code,
-                r
-            )
+    match conn.validate_login(user.username.as_str(), user.password.as_str()) {
+        Ok((id, api_key)) => ApiResponse::Accepted(format!(
+            "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
+            id, api_key
+        )),
+        Err(r) => ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", r)),
     }
 }
 
 #[post("/room", data = "<form>")]
-async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
+async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiResponse {
     let conn = connection();
 
     let inform = form.into_inner();
@@ -94,11 +95,7 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
     let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(e) => {
-            return format!(
-                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-                Status::Unauthorized.code,
-                e
-            );
+            return ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e));
         }
     };
 
@@ -110,11 +107,15 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> String {
         let _ = conv.send(room.serialize());
     }
 
-    format!(
-        "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
-        Status::Created.code,
-        user
-    )
+    ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
+}
+
+#[derive(Responder)]
+enum ApiResponseEvents<T> {
+    #[response(status = 200)]
+    Ok(T),
+    #[response(status = 401)]
+    Unauthorized(String),
 }
 
 /// Returns an infinite stream of server-sent events. Each event is a message
@@ -125,18 +126,21 @@ async fn get_events(
     api_key: String,
     convs: &State<Convs>,
     mut end: Shutdown,
-) -> Result<EventStream![], String> {
+) -> ApiResponseEvents<EventStream![]> {
     let conn = connection();
 
-    let bduser = conn.user_select_id(user_id)?;
+    let bduser = match conn.user_select_id(user_id) {
+        Ok(bduser) => bduser,
+        Err(_) => return ApiResponseEvents::Unauthorized("bad user id or api key".to_string()),
+    };
     let bdapi_key = bduser.api_key.as_str();
 
     if bdapi_key.eq("") {
-        return Err(format!("bad user id or api key"));
+        return ApiResponseEvents::Unauthorized("bad user id or api key".to_string());
     }
 
     if !bdapi_key.eq(api_key.as_str()) {
-        return Err(format!("bad user id or api key"));
+        return ApiResponseEvents::Unauthorized("bad user id or api key".to_string());
     }
 
     let mut rx;
@@ -163,7 +167,7 @@ async fn get_events(
     let messages = conn.load_messages(user_id).unwrap();
     let rooms = conn.load_rooms(user_id).unwrap();
 
-    Ok(EventStream! {
+    ApiResponseEvents::Ok(EventStream! {
         for rm in rooms {
             yield Event::json(&rm.serialize());
         };
@@ -189,7 +193,7 @@ async fn get_events(
 }
 
 #[post("/message", data = "<form>")]
-async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
+async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiResponse {
     let conn = connection();
 
     let inform = form.into_inner();
@@ -197,11 +201,7 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
     let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(e) => {
-            return format!(
-                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-                Status::Unauthorized.code,
-                e
-            );
+            return ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e));
         }
     };
 
@@ -213,11 +213,7 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
     let users = match conn.select_users_room(room_id) {
         Ok(users) => users,
         Err(e) => {
-            return format!(
-                "{{ \"status_code\": {}, \"status\": \"InternalServerError\", \"reason\": \"{}\" }}",
-                Status::InternalServerError.code,
-                e
-            );
+            return ApiResponse::InternalServerError(format!("{{ \"reason\": \"{}\" }}", e));
         }
     };
 
@@ -228,38 +224,28 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> String {
         }
     }
 
-    format!(
-        "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
-        Status::Created.code,
-        user
-    )
+    ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
 }
 
 #[post("/invite", data = "<form>")]
-async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> String {
+async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> ApiResponse {
     let conn = connection();
 
     let inform = form.into_inner();
     let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(e) => {
-            return format!(
-                "{{ \"status_code\": {}, \"status\": \"Unauthorized\", \"reason\": \"{}\" }}",
-                Status::Unauthorized.code,
-                e
-            );
+            return ApiResponse::Unauthorized(format!("{{ \"reason\": \"{}\" }}", e));
         }
     };
 
     let room = match conn.add_user_room(inform) {
         Ok(room) => room,
         Err(e) => {
-            return format!(
-                "{{ \"status_code\": {}, \"status\": \"BadRequest\", \"api_key\": \"{}\", \"reason\": \"{}\" }}",
-                Status::BadRequest.code,
-                user,
-                e
-            );
+            return ApiResponse::BadRequest(format!(
+                "{{ \"api_key\": \"{}\", \"reason\": \"{}\" }}",
+                user, e
+            ));
         }
     };
 
@@ -273,11 +259,7 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> Strin
         }
     }
 
-    format!(
-        "{{ \"status_code\": {}, \"status\": \"Created\", \"api_key\": \"{}\" }}",
-        Status::Created.code,
-        user
-    )
+    ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
 }
 
 static mut TEST: bool = false;

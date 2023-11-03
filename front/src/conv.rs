@@ -58,9 +58,10 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         cx.spawn(async move {
             match reqwest::Client::new().post(&url).form(&form).send().await {
                 Ok(res) => {
+                    let status = res.status().as_u16();
                     let r = res.text().await.unwrap();
                     let value = json::parse(r.as_str()).unwrap();
-                    match value["status_code"].as_u16().unwrap() {
+                    match status {
                         201 => {
                             user_clone
                                 .write_silent()
@@ -100,13 +101,14 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
         cx.spawn(async move {
             match reqwest::Client::new().post(&url).form(&form).send().await {
                 Ok(res) => {
+                    let status = res.status().as_u16();
                     let r = res.text().await.unwrap();
                     let value = json::parse(r.as_str()).unwrap();
                     match value["api_key"].as_str() {
                         Some(api_key) => user.write_silent().set_api_key(api_key.to_string()),
                         None => {}
                     }
-                    match value["status_code"].as_u16().unwrap() {
+                    match status {
                         201 => {
                             error_invite.set(None);
                             username.set(String::new());
@@ -129,7 +131,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                     to: Route::SideBar { room_id: OpRoomId::new_empty() },
                     "<"
                 }
-                
+
                 span { room_data.name.as_str() }
             }
             match error_invite.as_ref() {
@@ -220,16 +222,20 @@ fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
         None => {
             users.write().0.insert(message_user_id, None);
             cx.spawn(async move {
-                let res = reqwest::Client::new()
+                match reqwest::Client::new()
                     .get(format!("{BASE_API_URL}/user/{}", message_user_id))
                     .send()
-                    .await;
-                if res.is_ok() {
-                    let r = res.unwrap().text().await.unwrap();
-                    let value = json::parse(r.as_str()).unwrap();
-                    if value["status_code"].as_u16().unwrap() == 200 {
-                        users_setter.set_state(value["username"].as_str().unwrap().to_string());
+                    .await
+                {
+                    Ok(res) => {
+                        let status = res.status().as_u16();
+                        let r = res.text().await.unwrap();
+                        let value = json::parse(r.as_str()).unwrap();
+                        if status == 200 {
+                            users_setter.set_state(value["username"].as_str().unwrap().to_string());
+                        }
                     }
+                    Err(_) => {}
                 }
             });
             String::from("Loading...")

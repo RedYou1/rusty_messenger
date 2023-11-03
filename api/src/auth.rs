@@ -44,7 +44,7 @@ impl MyConnection {
         let bduser = self.user_select_username(username)?;
 
         if !bcrypt::verify(pass, bduser.pass.as_str()) {
-            return Err(format!("bad user id or api key"));
+            return Err(format!("bad username or password"));
         }
 
         let napi = bcrypt::hash(format!(

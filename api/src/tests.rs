@@ -41,6 +41,16 @@ async fn test_login() {
     let past_user = add_user(&client, &user1)
         .await
         .expect("The user test1 shouldn't exists");
+    let failed_user = FormAddUser {
+        username: "test1".to_string(),
+        password: "testX".to_string(),
+    };
+    assert_eq!(
+        login(&client, &failed_user)
+            .await
+            .expect_err("Wrong password"),
+        "bad username or password"
+    );
     let mut user = login(&client, &user1)
         .await
         .expect("The user test1 should exists");
@@ -58,7 +68,26 @@ async fn test_login() {
         .await
         .expect("can't create Room #1");
 
-    let mut user_events = listen_events(&client, &user).await;
+    match listen_events(
+        &client,
+        &UserPass {
+            id: 100,
+            username: "test".to_string(),
+            pass: "test".to_string(),
+            api_key: "no_key".to_string(),
+        },
+    )
+    .await
+    {
+        Ok(_) => {
+            panic!("wrong event stream cant succed")
+        }
+        Err(e) => {
+            assert_eq!(e, "bad user id or api key");
+        }
+    };
+
+    let mut user_events = listen_events(&client, &user).await.unwrap();
     user_events
         .test_next(EventMessage::Room(room.clone()))
         .await;
@@ -91,7 +120,7 @@ async fn test_login() {
         .await
         .expect("can't invite");
 
-    let mut user2_events = listen_events(&client, &user2).await;
+    let mut user2_events = listen_events(&client, &user2).await.unwrap();
     user2_events
         .test_next(EventMessage::Room(room.clone()))
         .await;
@@ -122,16 +151,15 @@ pub fn initialize() {
 }
 
 async fn add_user<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPass, String> {
-    let result = into_json(
-        client
-            .post(uri!(post_adduser))
-            .header(ContentType::Form)
-            .body((login as &dyn UriDisplay<Query>).to_string())
-            .dispatch()
-            .await,
-    )
-    .await;
-    match result["status_code"].as_u16().unwrap() {
+    let response = client
+        .post(uri!(post_adduser))
+        .header(ContentType::Form)
+        .body((login as &dyn UriDisplay<Query>).to_string())
+        .dispatch()
+        .await;
+    let status = response.status().code;
+    let result = into_json(response).await;
+    match status {
         201 => Ok(UserPass {
             id: result["user_id"].as_i64().unwrap(),
             username: login.username.clone(),
@@ -143,24 +171,25 @@ async fn add_user<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPas
 }
 
 async fn get_user<'c>(client: &'c Client, id: i64) -> Result<String, String> {
-    let result = into_json(client.get(format!("/user/{}", id)).dispatch().await).await;
-    match result["status_code"].as_u16().unwrap() {
+    let response = client.get(format!("/user/{}", id)).dispatch().await;
+    let status = response.status().code;
+    let result = into_json(response).await;
+    match status {
         200 => Ok(result["username"].as_str().unwrap().to_string()),
         _ => Err(result["reason"].as_str().unwrap().to_string()),
     }
 }
 
 async fn login<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPass, String> {
-    let result = into_json(
-        client
-            .post(uri!(post_login))
-            .header(ContentType::Form)
-            .body((login as &dyn UriDisplay<Query>).to_string())
-            .dispatch()
-            .await,
-    )
-    .await;
-    match result["status_code"].as_u16().unwrap() {
+    let response = client
+        .post(uri!(post_login))
+        .header(ContentType::Form)
+        .body((login as &dyn UriDisplay<Query>).to_string())
+        .dispatch()
+        .await;
+    let status = response.status().code;
+    let result = into_json(response).await;
+    match status {
         202 => Ok(UserPass {
             id: result["user_id"].as_i64().unwrap(),
             username: login.username.clone(),
@@ -178,16 +207,15 @@ impl UserPass {
             api_key: self.api_key.to_string(),
             name: name,
         };
-        let result = into_json(
-            client
-                .post(uri!(post_addroom))
-                .header(ContentType::Form)
-                .body((&room as &dyn UriDisplay<Query>).to_string())
-                .dispatch()
-                .await,
-        )
-        .await;
-        match result["status_code"].as_u16().unwrap() {
+        let response = client
+            .post(uri!(post_addroom))
+            .header(ContentType::Form)
+            .body((&room as &dyn UriDisplay<Query>).to_string())
+            .dispatch()
+            .await;
+        let status = response.status().code;
+        let result = into_json(response).await;
+        match status {
             201 => {
                 self.api_key = result["api_key"].as_str().unwrap().to_string();
                 Ok(Room {
@@ -211,20 +239,19 @@ impl UserPass {
             user_other: other_user,
             room_id: room,
         };
-        let result = into_json(
-            client
-                .post(uri!(post_invite))
-                .header(ContentType::Form)
-                .body((&room as &dyn UriDisplay<Query>).to_string())
-                .dispatch()
-                .await,
-        )
-        .await;
+        let response = client
+            .post(uri!(post_invite))
+            .header(ContentType::Form)
+            .body((&room as &dyn UriDisplay<Query>).to_string())
+            .dispatch()
+            .await;
+        let status = response.status().code;
+        let result = into_json(response).await;
         match result["api_key"].as_str() {
             Some(api_key) => self.api_key = api_key.to_string(),
             None => {}
         }
-        match result["status_code"].as_u16().unwrap() {
+        match status {
             201 => Ok(()),
             _ => Err(result["reason"].as_str().unwrap().to_string()),
         }
@@ -242,20 +269,19 @@ impl UserPass {
             room_id: room_id,
             text: text,
         };
-        let result = into_json(
-            client
-                .post(uri!(post_message))
-                .header(ContentType::Form)
-                .body((&message as &dyn UriDisplay<Query>).to_string())
-                .dispatch()
-                .await,
-        )
-        .await;
+        let response = client
+            .post(uri!(post_message))
+            .header(ContentType::Form)
+            .body((&message as &dyn UriDisplay<Query>).to_string())
+            .dispatch()
+            .await;
+        let status = response.status().code;
+        let result = into_json(response).await;
         match result["api_key"].as_str() {
             Some(api_key) => self.api_key = api_key.to_string(),
             None => {}
         }
-        match result["status_code"].as_u16().unwrap() {
+        match status {
             201 => Ok(Message {
                 date: Utc::now(),
                 room_id: message.room_id,
@@ -267,7 +293,7 @@ impl UserPass {
     }
 }
 
-async fn into_json<'c>(res: LocalResponse<'c>) -> JsonValue {
+pub async fn into_json<'c>(res: LocalResponse<'c>) -> JsonValue {
     let res = res.into_string().await.unwrap();
     json::parse(res.as_str()).unwrap()
 }
