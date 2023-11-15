@@ -49,35 +49,22 @@ async fn test_login() {
         password: "test_login".to_string(),
     };
     assert_eq!(
-        login(&client, &form_user)
-            .await
-            .unwrap_err(),
+        login(&client, &form_user).await.unwrap_err(),
         "bad username or password"
     );
-    let add_user = add_user(&client, &form_user)
-        .await
-        .unwrap();
+    let add_user = add_user(&client, &form_user).await.unwrap();
     let failed_user = FormAddUser {
         username: "test_login".to_string(),
         password: "Wrong password".to_string(),
     };
     assert_eq!(
-        login(&client, &failed_user)
-            .await
-            .unwrap_err(),
+        login(&client, &failed_user).await.unwrap_err(),
         "bad username or password"
     );
-    let user = login(&client, &form_user)
-        .await
-        .unwrap();
+    let user = login(&client, &form_user).await.unwrap();
     assert_eq!(add_user.id, user.id);
     assert_ne!(add_user.api_key, user.api_key);
-    assert_eq!(
-        user.username,
-        get_user(&client, user.id)
-            .await
-            .unwrap()
-    );
+    assert_eq!(user.username, get_user(&client, user.id).await.unwrap());
 }
 
 #[async_test]
@@ -100,7 +87,38 @@ async fn test_room() {
 }
 
 #[async_test]
-async fn test_base() {
+async fn test_wrong_event() {
+    initialize();
+    let client = Client::tracked(build(true)).await.unwrap();
+
+    let user_1 = add_user(
+        &client,
+        &FormAddUser {
+            username: "test_wrong_event".to_string(),
+            password: "test_wrong_event".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        listen_events(
+            &client,
+            &UserPass {
+                id: user_1.id,
+                username: user_1.username.to_string(),
+                pass: user_1.pass.to_string(),
+                api_key: "wrong_key".to_string(),
+            },
+        )
+        .await
+        .unwrap_err(),
+        "bad user id or api key"
+    );
+}
+
+#[async_test]
+async fn test_event() {
     initialize();
     let client = Client::tracked(build(true)).await.unwrap();
 
@@ -118,25 +136,6 @@ async fn test_base() {
         .addroom(&client, String::from("Room #1"))
         .await
         .unwrap();
-
-    match listen_events(
-        &client,
-        &UserPass {
-            id: 100,
-            username: "test".to_string(),
-            pass: "test".to_string(),
-            api_key: "no_key".to_string(),
-        },
-    )
-    .await
-    {
-        Ok(_) => {
-            panic!("wrong event stream cant succed")
-        }
-        Err(e) => {
-            assert_eq!(e, "bad user id or api key");
-        }
-    };
 
     let mut user_1_events = listen_events(&client, &user_1).await.unwrap();
     user_1_events
@@ -160,12 +159,7 @@ async fn test_base() {
     )
     .await
     .unwrap();
-    assert_eq!(
-        user_2.username,
-        get_user(&client, user_2.id)
-            .await
-            .unwrap()
-    );
+    assert_eq!(user_2.username, get_user(&client, user_2.id).await.unwrap());
 
     user_1
         .invite(&client, user_2.username.to_string(), room.id)

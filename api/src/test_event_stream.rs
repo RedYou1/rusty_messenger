@@ -6,6 +6,7 @@ use rocket::tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::user::UserPass;
 
+#[derive(Debug)]
 pub struct TestEventStream<'a> {
     username: String,
     stream: Lines<BufReader<LocalResponse<'a>>>,
