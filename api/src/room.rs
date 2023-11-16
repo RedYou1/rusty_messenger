@@ -46,11 +46,12 @@ impl MyConnection {
         let other = self.user_select_username(form.user_other.as_str())?;
 
         match self.conn.execute(
-            "INSERT INTO user_room (user_id, room_id) VALUES (?1, ?2)",
-            (other.id, form.room_id),
+            "INSERT INTO user_room (user_id, room_id) SELECT ?1, ?2 FROM user_room WHERE user_id = ?3 AND room_id = ?2",
+            (other.id, form.room_id, form.user_id),
         ) {
+            Ok(0) => Err(String::from("You can't invite someone in a room you aren't in.")),
             Ok(_) => Ok((room, other.id)),
-            Err(_) => Err(format!("Can't invite that user.")),
+            Err(_) => Err(String::from("That user is already in that room.")),
         }
     }
 

@@ -74,15 +74,88 @@ async fn test_room() {
 
     assert_eq!(
         UserPass {
-            id: 100,
+            id: -1,
             username: "test_room".to_string(),
             pass: "test_room".to_string(),
             api_key: "no key".to_string(),
         }
-        .addroom(&client, String::from("Room #1"))
+        .addroom(&client, String::from("Room Room #1"))
         .await
         .unwrap_err(),
         "bad user id or api key"
+    );
+}
+
+#[async_test]
+async fn test_invite() {
+    initialize();
+    let client = Client::tracked(build(true)).await.unwrap();
+
+    assert_eq!(
+        UserPass {
+            id: -1,
+            username: "test_invite_1".to_string(),
+            pass: "test_invite_1".to_string(),
+            api_key: "wrong_key".to_string(),
+        }
+        .invite(&client, "test_invite_1".to_string(), 1)
+        .await
+        .unwrap_err(),
+        "bad user id or api key"
+    );
+
+    let mut user_1 = add_user(
+        &client,
+        &FormAddUser {
+            username: "test_invite_1".to_string(),
+            password: "test_invite_1".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let room = user_1
+        .addroom(&client, String::from("Room Invite #1"))
+        .await
+        .unwrap();
+
+    let mut user_2 = add_user(
+        &client,
+        &FormAddUser {
+            username: "test_invite_2".to_string(),
+            password: "test_invite_2".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        user_1
+            .invite(&client, user_2.username.to_string(), -1)
+            .await
+            .unwrap_err(),
+        "no room with the id -1"
+    );
+
+    assert_eq!(
+        user_2
+            .invite(&client, user_1.username.to_string(), room.id)
+            .await
+            .unwrap_err(),
+        "You can't invite someone in a room you aren't in."
+    );
+
+    assert!(user_1
+        .invite(&client, user_2.username.to_string(), room.id)
+        .await
+        .is_ok());
+
+    assert_eq!(
+        user_1
+            .invite(&client, user_2.username, room.id)
+            .await
+            .unwrap_err(),
+        "That user is already in that room."
     );
 }
 
@@ -133,7 +206,7 @@ async fn test_event() {
     .unwrap();
 
     let room = user_1
-        .addroom(&client, String::from("Room #1"))
+        .addroom(&client, String::from("Room Event #1"))
         .await
         .unwrap();
 
