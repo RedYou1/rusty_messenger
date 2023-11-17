@@ -43,8 +43,8 @@ enum ApiResponse {
     Unauthorized(String),
 }
 
-#[post("/adduser", data = "<form>")]
-fn post_adduser(form: Form<FormAddUser>) -> ApiResponse {
+#[post("/user", data = "<form>")]
+fn post_user(form: Form<FormAddUser>) -> ApiResponse {
     let conn = connection();
     match conn.add_user(form.into_inner()) {
         Ok(user) => ApiResponse::Created(format!(
@@ -86,7 +86,7 @@ fn post_login(form: Form<FormAddUser>) -> ApiResponse {
 }
 
 #[post("/room", data = "<form>")]
-async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiResponse {
+async fn post_room(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiResponse {
     let conn = connection();
 
     let inform = form.into_inner();
@@ -104,7 +104,6 @@ async fn post_addroom(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiRespo
 
     let lock = convs.read().await;
     if let Some(conv) = lock.get(&user_id) {
-        // A send 'fails' if there are no active subscribers. That's okay.
         let _ = conv.send(room.serialize());
     }
 
@@ -222,7 +221,6 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiRespo
 
     for user_id in users {
         if let Some(conv) = lock.get(&user_id) {
-            // A send 'fails' if there are no active subscribers. That's okay.
             let _ = conv.send(smessage.to_string());
         }
     }
@@ -256,7 +254,6 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> ApiRe
 
     let lock = convs.read().await;
     if let Some(conv) = lock.get(&room.1) {
-        // A send 'fails' if there are no active subscribers. That's okay.
         let _ = conv.send(room.0.serialize());
         let messages = conn.load_messages(room.1).unwrap();
         for message in messages {
@@ -285,12 +282,12 @@ pub fn build(test: bool) -> Rocket<Build> {
         .mount(
             "/",
             routes![
-                post_adduser,
+                post_user,
                 post_login,
                 get_events,
                 get_user,
                 post_message,
-                post_addroom,
+                post_room,
                 post_invite
             ],
         )

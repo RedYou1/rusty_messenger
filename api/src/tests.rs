@@ -273,7 +273,7 @@ pub fn initialize() {
 
 async fn add_user<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPass, String> {
     let response = client
-        .post(uri!(post_adduser))
+        .post(uri!(post_user))
         .header(ContentType::Form)
         .body((login as &dyn UriDisplay<Query>).to_string())
         .dispatch()
@@ -329,7 +329,7 @@ impl UserPass {
             name: name,
         };
         let response = client
-            .post(uri!(post_addroom))
+            .post(uri!(post_room))
             .header(ContentType::Form)
             .body((&room as &dyn UriDisplay<Query>).to_string())
             .dispatch()

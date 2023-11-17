@@ -31,7 +31,7 @@ pub fn CreateUser(cx: Scope) -> Element {
         let user = user.to_owned();
         let username = username.to_owned();
         let error = error.to_owned();
-        let url = format!("{BASE_API_URL}/adduser");
+        let url = format!("{BASE_API_URL}/user");
         let nav = nav.to_owned();
         cx.spawn(async move {
             match reqwest::Client::new().post(&url).form(&form).send().await {

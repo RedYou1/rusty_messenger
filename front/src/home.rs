@@ -2,6 +2,7 @@ use dioxus::prelude::Scope;
 use dioxus::prelude::*;
 use dioxus_router::prelude::use_navigator;
 
+use crate::room::OpRoomId;
 use crate::AccountManager;
 use crate::Rooms;
 use crate::Route;
@@ -17,6 +18,10 @@ pub fn Home(cx: Scope) -> Element {
         Some(_) => {
             if let Some(room) = rooms.read().0.keys().last() {
                 nav.replace(Route::Conv { room_id: *room });
+            } else {
+                nav.replace(Route::SideBar {
+                    room_id: OpRoomId::new_empty(),
+                });
             }
         }
         None => {
