@@ -357,7 +357,7 @@ impl UserPass {
         let room = FormAddUserRoom {
             user_id: self.id,
             api_key: self.api_key.to_string(),
-            user_other: other_user,
+            other_user_username: other_user,
             room_id: room,
         };
         let response = client

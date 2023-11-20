@@ -19,7 +19,7 @@ pub struct FormAddRoom {
 pub struct FormAddUserRoom {
     pub user_id: i64,
     pub api_key: String,
-    pub user_other: String,
+    pub other_user_username: String,
     pub room_id: i64,
 }
 
@@ -43,14 +43,14 @@ impl MyConnection {
 
     pub fn add_user_room<'a>(&'a self, form: FormAddUserRoom) -> Result<(Room, i64), String> {
         let room = self.room_select_id(form.room_id)?;
-        let other = self.user_select_username(form.user_other.as_str())?;
+        let other_user = self.user_select_username(form.other_user_username.as_str())?;
 
         match self.conn.execute(
             "INSERT INTO user_room (user_id, room_id) SELECT ?1, ?2 FROM user_room WHERE user_id = ?3 AND room_id = ?2",
-            (other.id, form.room_id, form.user_id),
+            (other_user.id, form.room_id, form.user_id),
         ) {
             Ok(0) => Err(String::from("You can't invite someone in a room you aren't in.")),
-            Ok(_) => Ok((room, other.id)),
+            Ok(_) => Ok((room, other_user.id)),
             Err(_) => Err(String::from("That user is already in that room.")),
         }
     }
@@ -61,20 +61,13 @@ impl MyConnection {
             .prepare("SELECT id, name FROM room WHERE id = ?1")
             .map_err(|_| format!("cant prepare"))?;
 
-        let rows = stmt
+        let mut rows = stmt
             .query_map([room_id], map_room)
             .map_err(|_| format!("cant querry"))?;
 
-        let mut obduser = None;
-        for usr in rows {
-            if obduser.is_some() {
-                return Err(format!("multiple rooms with the id {}", room_id));
-            }
-            obduser = Some(usr.map_err(|usr| format!("bad room {}", usr.to_string()))?);
-        }
-        match obduser {
-            Some(obduser) => Ok(obduser),
-            None => Err(format!("no room with the id {}", room_id)),
+        match rows.next() {
+            Some(Ok(bd_room)) => Ok(bd_room),
+            _ => Err(format!("no room with the id {}", room_id)),
         }
     }
 

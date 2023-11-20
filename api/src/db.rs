@@ -75,7 +75,6 @@ fn database_url(test: bool) -> &'static String {
                 false => "DATABASE_URL",
                 true => "DATABASE_URL_TEST",
             };
-            let error_message = format!("{} must be set", path);
             DATABASE_URL = env::var(path).unwrap();
         });
         &DATABASE_URL
@@ -90,7 +89,7 @@ impl MyConnection {
         })
     }
 
-    pub fn ensure_tables(&self) -> Result<()> {
+    pub fn create_tables(&self) -> Result<()> {
         self.conn.execute_batch(
             " 
             CREATE TABLE IF NOT EXISTS user

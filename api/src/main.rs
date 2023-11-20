@@ -75,9 +75,9 @@ fn post_login(form: Form<FormAddUser>) -> ApiResponse {
     let user = form.into_inner();
 
     match conn.validate_login(user.username.as_str(), user.password.as_str()) {
-        Ok((id, api_key)) => ApiResponse::Accepted(format!(
+        Ok(auth) => ApiResponse::Accepted(format!(
             "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
-            id, api_key
+            auth.user_id, auth.api_key
         )),
         Err(_) => {
             ApiResponse::Unauthorized(String::from("{ \"reason\": \"bad username or password\" }"))
@@ -91,7 +91,7 @@ async fn post_room(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiResponse
 
     let inform = form.into_inner();
     let user_id = inform.user_id;
-    let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
+    let user = match conn.validate_user_with_api_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
@@ -198,7 +198,7 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiRespo
 
     let inform = form.into_inner();
     let room_id = inform.room_id;
-    let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
+    let user = match conn.validate_user_with_api_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
@@ -233,7 +233,7 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> ApiRe
     let conn = connection();
 
     let inform = form.into_inner();
-    let user = match conn.validate_user_key(inform.user_id, inform.api_key.as_str()) {
+    let user = match conn.validate_user_with_api_key(inform.user_id, inform.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
@@ -274,7 +274,7 @@ pub fn build(test: bool) -> Rocket<Build> {
     unsafe {
         TEST = test;
     }
-    connection().ensure_tables().unwrap();
+    connection().create_tables().unwrap();
 
     rocket::build()
         .attach(crate::cors::CORS)
