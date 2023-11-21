@@ -59,19 +59,19 @@ impl ToSql for DateTimeSql {
     }
 }
 
-pub struct MyConnection {
+pub struct Database {
     _private: (),
-    pub conn: Connection,
+    pub connection: Connection,
 }
 
 static mut DATABASE_URL: String = String::new();
 static INIT: Once = Once::new();
 
-fn database_url(test: bool) -> &'static String {
+fn database_url(is_unit_test: bool) -> &'static String {
     unsafe {
         INIT.call_once(|| {
             dotenv().unwrap();
-            let path = match test {
+            let path = match is_unit_test {
                 false => "DATABASE_URL",
                 true => "DATABASE_URL_TEST",
             };
@@ -81,16 +81,16 @@ fn database_url(test: bool) -> &'static String {
     }
 }
 
-impl MyConnection {
-    pub fn new(test: bool) -> Result<MyConnection> {
-        Ok(MyConnection {
+impl Database {
+    pub fn new(is_unit_test: bool) -> Result<Database> {
+        Ok(Database {
             _private: (),
-            conn: Connection::open(database_url(test))?,
+            connection: Connection::open(database_url(is_unit_test))?,
         })
     }
 
     pub fn create_tables(&self) -> Result<()> {
-        self.conn.execute_batch(
+        self.connection.execute_batch(
             " 
             CREATE TABLE IF NOT EXISTS user
             (
@@ -133,16 +133,15 @@ impl MyConnection {
     }
 
     pub fn load_rooms(&self, user_id: i64) -> Result<Vec<Room>> {
-        let mut stmt = self.conn.prepare("SELECT room.id, room.name FROM user_room INNER JOIN room on room.id = user_room.room_id WHERE user_id = ?1")?;
+        let mut stmt = self.connection.prepare("SELECT room.id, room.name FROM user_room INNER JOIN room on room.id = user_room.room_id WHERE user_id = ?1")?;
         let rows = stmt.query([user_id])?;
 
-        let m = rows.mapped(|row| {
+        rows.mapped(|row| {
             Ok(Room {
                 id: row.get::<usize, i64>(0)?,
                 name: row.get::<usize, String>(1)?,
             })
-        });
-
-        m.collect()
+        })
+        .collect()
     }
 }

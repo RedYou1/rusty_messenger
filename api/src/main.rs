@@ -8,12 +8,12 @@ mod tests;
 
 mod auth;
 mod cors;
-mod db;
+mod database;
 mod message;
 mod room;
 mod user;
 
-use db::MyConnection;
+use database::Database;
 use message::FormMessage;
 use rocket::form::Form;
 use rocket::fs::{relative, FileServer};
@@ -27,7 +27,7 @@ use room::{FormAddRoom, FormAddUserRoom};
 use std::collections::HashMap;
 use user::FormAddUser;
 
-type Convs = RwLock<HashMap<i64, Sender<String>>>;
+type EventStreams = RwLock<HashMap<i64, Sender<String>>>;
 
 #[derive(Debug, Responder)]
 enum ApiResponse {
@@ -45,8 +45,8 @@ enum ApiResponse {
 
 #[post("/user", data = "<form>")]
 fn post_user(form: Form<FormAddUser>) -> ApiResponse {
-    let conn = connection();
-    match conn.add_user(form.into_inner()) {
+    let bd_connection = connection();
+    match bd_connection.add_user(form.into_inner()) {
         Ok(user) => ApiResponse::Created(format!(
             "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
             user.user_id, user.api_key
@@ -59,8 +59,8 @@ fn post_user(form: Form<FormAddUser>) -> ApiResponse {
 
 #[get("/user/<user_id>")]
 fn get_user(user_id: i64) -> ApiResponse {
-    let conn = connection();
-    match conn.user_select_id(user_id) {
+    let bd_connection = connection();
+    match bd_connection.user_select_id(user_id) {
         Ok(user) => ApiResponse::Ok(format!(
             "{{ \"user_id\": {}, \"username\": \"{}\" }}",
             user.id, user.username
@@ -71,10 +71,10 @@ fn get_user(user_id: i64) -> ApiResponse {
 
 #[post("/login", data = "<form>")]
 fn post_login(form: Form<FormAddUser>) -> ApiResponse {
-    let conn = connection();
-    let user = form.into_inner();
+    let bd_connection = connection();
+    let form = form.into_inner();
 
-    match conn.validate_login(user.username.as_str(), user.password.as_str()) {
+    match bd_connection.validate_login(form.username.as_str(), form.password.as_str()) {
         Ok(auth) => ApiResponse::Accepted(format!(
             "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
             auth.user_id, auth.api_key
@@ -86,12 +86,12 @@ fn post_login(form: Form<FormAddUser>) -> ApiResponse {
 }
 
 #[post("/room", data = "<form>")]
-async fn post_room(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiResponse {
-    let conn = connection();
+async fn post_room(form: Form<FormAddRoom>, convs: &State<EventStreams>) -> ApiResponse {
+    let bd_connection = connection();
+    let form = form.into_inner();
+    let user_id = form.user_id;
 
-    let inform = form.into_inner();
-    let user_id = inform.user_id;
-    let user = match conn.validate_user_with_api_key(inform.user_id, inform.api_key.as_str()) {
+    let user = match bd_connection.validate_user_with_api_key(form.user_id, form.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
@@ -100,11 +100,11 @@ async fn post_room(form: Form<FormAddRoom>, convs: &State<Convs>) -> ApiResponse
         }
     };
 
-    let room = conn.add_room(inform).unwrap();
+    let room = bd_connection.add_room(form).unwrap();
 
     let lock = convs.read().await;
-    if let Some(conv) = lock.get(&user_id) {
-        let _ = conv.send(room.serialize());
+    if let Some(event_stream) = lock.get(&user_id) {
+        event_stream.send(room.serialize()).unwrap();
     }
 
     ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
@@ -118,87 +118,73 @@ enum ApiResponseEvents<T> {
     Unauthorized(String),
 }
 
-/// Returns an infinite stream of server-sent events. Each event is a message
-/// pulled from a broadcast queue sent by the `post` handler.
 #[get("/events/<user_id>?<api_key>")]
 async fn get_events(
     user_id: i64,
     api_key: String,
-    convs: &State<Convs>,
+    event_streams: &State<EventStreams>,
     mut end: Shutdown,
 ) -> ApiResponseEvents<EventStream![]> {
-    let conn = connection();
+    let bd_connection = connection();
 
-    let bduser = match conn.user_select_id(user_id) {
-        Ok(bduser) => bduser,
+    let bd_user = match bd_connection.user_select_id(user_id) {
+        Ok(bd_user) => bd_user,
         Err(_) => return ApiResponseEvents::Unauthorized(String::from("bad user id or api key")),
     };
-    let bdapi_key = bduser.api_key.as_str();
+    let bd_api_key = bd_user.api_key.as_str();
 
-    if bdapi_key.eq("") {
+    if bd_api_key.eq("") || !bd_api_key.eq(api_key.as_str()) {
         return ApiResponseEvents::Unauthorized(String::from("bad user id or api key"));
     }
 
-    if !bdapi_key.eq(api_key.as_str()) {
-        return ApiResponseEvents::Unauthorized(String::from("bad user id or api key"));
-    }
+    let mut event_receiver = match {
+        let lock = event_streams.read().await;
+        lock.get(&user_id)
+            .map(|event_sender| event_sender.subscribe())
+    } {
+        Some(event_receiver) => event_receiver,
+        None => {
+            let event_sender = Some(channel::<String>(1024).0).unwrap();
+            let mut lock = event_streams.write().await;
+            lock.insert(user_id, event_sender);
 
-    let mut rx;
-
-    {
-        let mut trx = None;
-        {
-            let lock = convs.read().await;
-            if let Some(conv) = lock.get(&user_id) {
-                trx = Some(conv.subscribe());
-            }
+            lock.get(&user_id).unwrap().subscribe()
         }
-        match trx {
-            Some(t) => rx = t,
-            None => {
-                let t = Some(channel::<String>(1024).0);
-                let mut lock = convs.write().await;
-                lock.insert(user_id, t.unwrap());
-                rx = lock.get(&user_id).unwrap().subscribe();
-            }
-        }
-    }
+    };
 
-    let messages = conn.load_messages(user_id).unwrap();
-    let rooms = conn.load_rooms(user_id).unwrap();
+    let messages = bd_connection.load_messages(user_id).unwrap();
+    let rooms = bd_connection.load_rooms(user_id).unwrap();
 
     ApiResponseEvents::Ok(EventStream! {
-        for rm in rooms {
-            yield Event::json(&rm.serialize());
+        for room in rooms {
+            yield Event::json(&room.serialize());
         };
-        for msg in messages {
-            yield Event::json(&msg.serialize());
+        for message in messages {
+            yield Event::json(&message.serialize());
         };
         loop {
-            let msg = select! {
-                msg = rx.recv() => match msg {
-                    Ok(msg) => msg,
+            yield Event::json(&select! {
+                message = event_receiver.recv() => match message {
+                    Ok(message) => message,
                     Err(RecvError::Closed) => {
-                        let _ = conn.logout(user_id).unwrap();
+                        bd_connection.logout(user_id).unwrap();
                         break;
                     },
                     Err(RecvError::Lagged(_)) => continue,
                 },
                 _ = &mut end => break,
-            };
-
-            yield Event::json(&msg);
+            });
         }
     })
 }
 
 #[post("/message", data = "<form>")]
-async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiResponse {
-    let conn = connection();
+async fn post_message(form: Form<FormMessage>, event_streams: &State<EventStreams>) -> ApiResponse {
+    let bd_connection = connection();
+    let form = form.into_inner();
+    let room_id = form.room_id;
 
-    let inform = form.into_inner();
-    let room_id = inform.room_id;
-    let user = match conn.validate_user_with_api_key(inform.user_id, inform.api_key.as_str()) {
+    let user = match bd_connection.validate_user_with_api_key(form.user_id, form.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
@@ -207,21 +193,18 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiRespo
         }
     };
 
-    let message = conn.add_message(inform).unwrap();
-    let smessage = message.serialize();
-
-    let lock = convs.read().await;
-
-    let users = match conn.select_users_room(room_id) {
+    let message = bd_connection.add_message(form).unwrap().serialize();
+    let users = match bd_connection.select_users_room(room_id) {
         Ok(users) => users,
         Err(_) => {
             return ApiResponse::BadRequest(String::from("{ \"reason\": \"room doesnt exists\" }"))
         }
     };
 
+    let lock = event_streams.read().await;
     for user_id in users {
-        if let Some(conv) = lock.get(&user_id) {
-            let _ = conv.send(smessage.to_string());
+        if let Some(event_stream) = lock.get(&user_id) {
+            event_stream.send(message.to_string()).unwrap();
         }
     }
 
@@ -229,11 +212,13 @@ async fn post_message(form: Form<FormMessage>, convs: &State<Convs>) -> ApiRespo
 }
 
 #[post("/invite", data = "<form>")]
-async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> ApiResponse {
-    let conn = connection();
-
-    let inform = form.into_inner();
-    let user = match conn.validate_user_with_api_key(inform.user_id, inform.api_key.as_str()) {
+async fn post_invite(
+    form: Form<FormAddUserRoom>,
+    event_streams: &State<EventStreams>,
+) -> ApiResponse {
+    let bd_connection = connection();
+    let form = form.into_inner();
+    let user = match bd_connection.validate_user_with_api_key(form.user_id, form.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
@@ -242,7 +227,7 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> ApiRe
         }
     };
 
-    let room = match conn.add_user_room(inform) {
+    let room = match bd_connection.add_user_room(form) {
         Ok(room) => room,
         Err(e) => {
             return ApiResponse::BadRequest(format!(
@@ -252,27 +237,26 @@ async fn post_invite(form: Form<FormAddUserRoom>, convs: &State<Convs>) -> ApiRe
         }
     };
 
-    let lock = convs.read().await;
-    if let Some(conv) = lock.get(&room.1) {
-        let _ = conv.send(room.0.serialize());
-        let messages = conn.load_messages(room.1).unwrap();
-        for message in messages {
-            let _ = conv.send(message.serialize());
+    let lock = event_streams.read().await;
+    if let Some(event_stream) = lock.get(&room.1) {
+        event_stream.send(room.0.serialize()).unwrap();
+        for message in bd_connection.load_messages(room.1).unwrap() {
+            event_stream.send(message.serialize()).unwrap();
         }
     }
 
     ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
 }
 
-static mut TEST: bool = false;
-fn connection() -> MyConnection {
-    unsafe { MyConnection::new(TEST).unwrap() }
+static mut IS_UNIT_TEST: bool = false;
+fn connection() -> Database {
+    unsafe { Database::new(IS_UNIT_TEST).unwrap() }
 }
 
-pub fn build(test: bool) -> Rocket<Build> {
-    let c: Convs = RwLock::new(HashMap::<i64, Sender<String>>::new());
+pub fn build(is_unit_test: bool) -> Rocket<Build> {
+    let c: EventStreams = RwLock::new(HashMap::<i64, Sender<String>>::new());
     unsafe {
-        TEST = test;
+        IS_UNIT_TEST = is_unit_test;
     }
     connection().create_tables().unwrap();
 

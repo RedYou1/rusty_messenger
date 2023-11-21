@@ -2,7 +2,7 @@
 
 mod account_manager;
 mod async_state;
-mod conv;
+mod messages;
 mod create_user;
 mod event_source;
 mod home;
@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use crate::account_manager::AccountManager;
 use crate::async_state::AsyncStateSetter;
-use crate::conv::Conv;
+use crate::messages::Conv;
 use crate::create_user::CreateUser;
 use crate::event_source::SourceState;
 use crate::home::Home;
@@ -87,11 +87,11 @@ fn page(cx: Scope) -> Element {
         AccountManager::new(message_sender, room_sender, source_state_sender)
     });
 
-    let user = use_shared_state::<AccountManager>(cx).unwrap();
-    if user.read().user().is_some() {
+    let account_manager = use_shared_state::<AccountManager>(cx).unwrap();
+    if account_manager.read().current_user().is_some() {
         match *source_state.read() {
-            SourceState::Error => user.write().retry(),
-            SourceState::Connected => user.write_silent().connected(),
+            SourceState::Error => account_manager.write().retry_connection(),
+            SourceState::Connected => account_manager.write_silent().set_connected(),
             _ => {}
         }
     }

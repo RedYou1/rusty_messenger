@@ -4,7 +4,7 @@ use rand::Rng;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Result, Row};
 
-use crate::db::MyConnection;
+use crate::database::Database;
 
 /// Generate a new api_key (use new_api_key_2 when already have an api_key)
 pub fn new_api_key() -> String {
@@ -65,11 +65,11 @@ pub struct FormAddUser {
     pub password: String,
 }
 
-impl MyConnection {
+impl Database {
     pub fn add_user<'a>(&'a self, user: FormAddUser) -> Result<AuthKey> {
         let napi = new_api_key();
 
-        self.conn.execute(
+        self.connection.execute(
             "INSERT INTO user (username, password, api_key) VALUES (?1,?2,?3)",
             (
                 user.username.as_str(),
@@ -79,7 +79,7 @@ impl MyConnection {
         )?;
 
         Ok(AuthKey {
-            user_id: self.conn.last_insert_rowid(),
+            user_id: self.connection.last_insert_rowid(),
             api_key: napi,
         })
     }
@@ -90,7 +90,7 @@ impl MyConnection {
 
     pub fn user_select_id<'a>(&'a self, user_id: i64) -> Result<UserPass, String> {
         let mut stmt = self
-            .conn
+            .connection
             .prepare("SELECT id, username, password, api_key FROM user WHERE id = ?1")
             .map_err(|_| format!("cant prepare the querry"))?;
 
@@ -99,14 +99,14 @@ impl MyConnection {
             .map_err(|_| format!("cant execute the querry"))?;
 
         match rows.next() {
-            Some(Ok(obduser)) => Ok(obduser),
+            Some(Ok(bd_user)) => Ok(bd_user),
             _ => Err(format!("no user with the id {}", user_id)),
         }
     }
 
     pub fn user_select_username<'a, 'b>(&'a self, username: &'b str) -> Result<UserPass, String> {
         let mut stmt = self
-            .conn
+            .connection
             .prepare("SELECT id, username, password, api_key FROM user WHERE username = ?1")
             .map_err(|_| format!("cant prepare the querry"))?;
 
@@ -121,7 +121,7 @@ impl MyConnection {
     }
 
     pub fn user_update_api_key<'a, 'b>(&'a self, api_key: &'b str, user_id: i64) -> Result<usize> {
-        self.conn.execute(
+        self.connection.execute(
             "
         UPDATE user
         SET api_key = ?1

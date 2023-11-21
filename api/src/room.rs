@@ -2,7 +2,7 @@ use lib::Room;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Result, Row};
 
-use crate::db::MyConnection;
+use crate::database::Database;
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
 #[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
@@ -23,29 +23,29 @@ pub struct FormAddUserRoom {
     pub room_id: i64,
 }
 
-impl MyConnection {
-    pub fn add_room<'a>(&'a self, room: FormAddRoom) -> Result<Room> {
-        self.conn
-            .execute("INSERT INTO room (name) VALUES (?1)", (room.name.as_str(),))?;
+impl Database {
+    pub fn add_room<'a>(&'a self, form: FormAddRoom) -> Result<Room> {
+        self.connection
+            .execute("INSERT INTO room (name) VALUES (?1)", (form.name.as_str(),))?;
 
-        let nroom = Room {
-            id: self.conn.last_insert_rowid(),
-            name: room.name,
+        let new_room = Room {
+            id: self.connection.last_insert_rowid(),
+            name: form.name,
         };
 
-        self.conn.execute(
+        self.connection.execute(
             "INSERT INTO user_room (room_id, user_id) VALUES (?1,?2)",
-            (nroom.id, room.user_id),
+            (new_room.id, form.user_id),
         )?;
 
-        Ok(nroom)
+        Ok(new_room)
     }
 
     pub fn add_user_room<'a>(&'a self, form: FormAddUserRoom) -> Result<(Room, i64), String> {
         let room = self.room_select_id(form.room_id)?;
         let other_user = self.user_select_username(form.other_user_username.as_str())?;
 
-        match self.conn.execute(
+        match self.connection.execute(
             "INSERT INTO user_room (user_id, room_id) SELECT ?1, ?2 FROM user_room WHERE user_id = ?3 AND room_id = ?2",
             (other_user.id, form.room_id, form.user_id),
         ) {
@@ -57,7 +57,7 @@ impl MyConnection {
 
     pub fn room_select_id<'a>(&'a self, room_id: i64) -> Result<Room, String> {
         let mut stmt = self
-            .conn
+            .connection
             .prepare("SELECT id, name FROM room WHERE id = ?1")
             .map_err(|_| format!("cant prepare"))?;
 
@@ -73,7 +73,7 @@ impl MyConnection {
 
     pub fn select_users_room<'a>(&'a self, room_id: i64) -> Result<Vec<i64>> {
         let mut stmt = self
-            .conn
+            .connection
             .prepare("SELECT user_id FROM user_room WHERE room_id = ?1")?;
         let rows = stmt.query([room_id])?;
         let m = rows.mapped(|row| Ok(row.get::<usize, i64>(0)?));

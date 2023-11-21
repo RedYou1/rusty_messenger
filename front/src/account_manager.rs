@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub struct AccountManager {
-    current: Option<User>,
+    current_user: Option<User>,
     try_tentative: i64,
     event_source: Option<MyEventSource>,
     message_sender: AsyncStateSetter<Message>,
@@ -22,7 +22,7 @@ impl AccountManager {
         source_state_sender: AsyncStateSetter<SourceState>,
     ) -> AccountManager {
         AccountManager {
-            current: None,
+            current_user: None,
             try_tentative: 0,
             event_source: None,
             message_sender: message_sender,
@@ -31,11 +31,11 @@ impl AccountManager {
         }
     }
 
-    pub fn user(&self) -> Option<&User> {
-        self.current.as_ref()
+    pub fn current_user(&self) -> Option<&User> {
+        self.current_user.as_ref()
     }
 
-    pub fn set_user(&mut self, user: Option<User>) {
+    pub fn set_current_user(&mut self, user: Option<User>) {
         match self.event_source.as_ref() {
             Some(e) => {
                 e.close();
@@ -44,13 +44,13 @@ impl AccountManager {
             None => {}
         }
 
-        self.current = user;
-        match self.current.as_ref() {
-            Some(e) => {
+        self.current_user = user;
+        match self.current_user.as_ref() {
+            Some(current_user) => {
                 self.try_tentative = 1;
                 self.event_source = Some(MyEventSource::new(
-                    e.id,
-                    e.api_key.as_str(),
+                    current_user.id,
+                    current_user.api_key.as_str(),
                     &self.message_sender,
                     &self.room_sender,
                     &self.source_state_sender,
@@ -60,17 +60,17 @@ impl AccountManager {
         }
     }
 
-    pub fn retry(&mut self) {
+    pub fn retry_connection(&mut self) {
         self.try_tentative += 1;
-        let user = self.user().unwrap();
+        let current_user = self.current_user().unwrap();
         self.event_source.as_ref().unwrap().close();
         if self.try_tentative > 3 {
-            self.current = None;
+            self.current_user = None;
             self.event_source = None;
         } else {
             self.event_source = Some(MyEventSource::new(
-                user.id,
-                user.api_key.as_str(),
+                current_user.id,
+                current_user.api_key.as_str(),
                 &self.message_sender,
                 &self.room_sender,
                 &self.source_state_sender,
@@ -79,10 +79,10 @@ impl AccountManager {
     }
 
     pub fn set_api_key(&mut self, api_key: String) {
-        self.current.as_mut().unwrap().api_key = api_key;
+        self.current_user.as_mut().unwrap().api_key = api_key;
     }
 
-    pub fn connected(&mut self) {
+    pub fn set_connected(&mut self) {
         self.try_tentative = 1;
     }
 }

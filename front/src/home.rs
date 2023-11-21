@@ -9,23 +9,23 @@ use crate::Route;
 
 #[inline_props]
 pub fn Home(cx: Scope) -> Element {
-    let user = use_shared_state::<AccountManager>(cx).unwrap();
+    let account_manager = use_shared_state::<AccountManager>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
 
-    let nav = use_navigator(cx);
+    let navigator = use_navigator(cx);
 
-    match user.read().user() {
+    match account_manager.read().current_user() {
         Some(_) => {
             if let Some(room) = rooms.read().0.keys().last() {
-                nav.replace(Route::Conv { room_id: *room });
+                navigator.replace(Route::Conv { room_id: *room });
             } else {
-                nav.replace(Route::SideBar {
+                navigator.replace(Route::SideBar {
                     room_id: OpRoomId::new_empty(),
                 });
             }
         }
         None => {
-            nav.replace(Route::LogIn {});
+            navigator.replace(Route::LogIn {});
         }
     };
 

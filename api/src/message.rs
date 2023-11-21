@@ -3,7 +3,7 @@ use lib::Message;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Result, Row};
 
-use crate::db::{DateTimeSql, MyConnection};
+use crate::database::{DateTimeSql, Database};
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
 #[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]
@@ -15,30 +15,30 @@ pub struct FormMessage {
     pub text: String,
 }
 
-impl MyConnection {
-    pub fn add_message<'a, 'b>(&'a self, message: FormMessage) -> Result<Message> {
-        let date = Utc::now();
-        self.conn.execute(
+impl Database {
+    pub fn add_message<'a, 'b>(&'a self, form: FormMessage) -> Result<Message> {
+        let now = Utc::now();
+        self.connection.execute(
             "INSERT INTO message (date, room_id, user_id, text) VALUES (?1, ?2, ?3, ?4)",
             (
-                date.timestamp(),
-                message.room_id,
-                message.user_id,
-                message.text.to_string(),
+                now.timestamp(),
+                form.room_id,
+                form.user_id,
+                form.text.to_string(),
             ),
         )?;
 
         Ok(Message {
-            date: date,
-            room_id: message.room_id,
-            user_id: message.user_id,
-            text: message.text,
+            date: now,
+            room_id: form.room_id,
+            user_id: form.user_id,
+            text: form.text,
         })
     }
 
     pub fn load_messages(&self, user_id: i64) -> Result<Vec<Message>> {
         let mut stmt =
-        self.conn.prepare("SELECT message.date, message.room_id, message.user_id, message.text FROM user_room INNER JOIN message ON message.room_id = user_room.room_id WHERE user_room.user_id = ?1 ORDER BY message.date")?;
+        self.connection.prepare("SELECT message.date, message.room_id, message.user_id, message.text FROM user_room INNER JOIN message ON message.room_id = user_room.room_id WHERE user_room.user_id = ?1 ORDER BY message.date")?;
         let rows = stmt.query_map([user_id], map_message)?;
 
         let mut messages = Vec::new();

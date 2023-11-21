@@ -9,7 +9,7 @@ use crate::{
 
 #[inline_props]
 pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
-    let user = use_shared_state::<AccountManager>(cx).unwrap();
+    let account_manager = use_shared_state::<AccountManager>(cx).unwrap();
     let source_state = use_shared_state::<SourceState>(cx).unwrap();
     let rooms = use_shared_state::<Rooms>(cx).unwrap();
     let name = use_state(cx, || String::new());
@@ -26,35 +26,35 @@ pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
             error.set(Some(String::from("Empty room name")));
             return;
         }
-        let form: HashMap<&str, String>;
-        {
-            let t = user.read();
-            let t = t.user().unwrap();
-            form = HashMap::<&'static str, String>::from([
-                ("user_id", t.id.to_string()),
-                ("api_key", t.api_key.to_string()),
+        let form: HashMap<&str, String> = {
+            let account_manager = account_manager.read();
+            let current_user = account_manager.current_user().unwrap();
+            HashMap::<&'static str, String>::from([
+                ("user_id", current_user.id.to_string()),
+                ("api_key", current_user.api_key.to_string()),
                 ("name", name.to_string()),
-            ]);
-        }
+            ])
+        };
 
-        let user = user.to_owned();
+        let account_manager = account_manager.to_owned();
         let name = name.to_owned();
         let error = error.to_owned();
         let url = format!("{BASE_API_URL}/room");
         cx.spawn(async move {
             match reqwest::Client::new().post(&url).form(&form).send().await {
-                Ok(res) => {
-                    let status = res.status().as_u16();
-                    let r = res.text().await.unwrap();
-                    let value = json::parse(r.as_str()).unwrap();
+                Ok(response) => {
+                    let status = response.status().as_u16();
+                    let response_body = response.text().await.unwrap();
+                    let response_data = json::parse(response_body.as_str()).unwrap();
                     match status {
                         201 => {
-                            user.write_silent()
-                                .set_api_key(value["api_key"].as_str().unwrap().to_string());
+                            account_manager.write_silent().set_api_key(
+                                response_data["api_key"].as_str().unwrap().to_string(),
+                            );
                             error.set(None);
                             name.set(String::new());
                         }
-                        _ => error.set(Some(value["reason"].as_str().unwrap().to_string())),
+                        _ => error.set(Some(response_data["reason"].as_str().unwrap().to_string())),
                     }
                 }
                 Err(_) => error.set(Some(String::from("Request Timeout"))),
@@ -65,8 +65,8 @@ pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
     let rooms = rooms.read();
     let rooms = rooms.0.iter();
 
-    let class_room = "room";
-    let class_room_active = "room active";
+    const CLASS_ROOM: &'static str = "room";
+    const CLASS_ROOM_ACTIVE: &'static str = "room active";
 
     render! {
         div {
@@ -85,8 +85,8 @@ pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
                     li {
                         Link {
                             class: match cx.props.room_id.as_ref() {
-                                Some(Some(current_room_id)) => if *current_room_id == *room_id { class_room_active } else { class_room },
-                                _ => class_room
+                                Some(Some(current_room_id)) => if *current_room_id == *room_id { CLASS_ROOM_ACTIVE } else { CLASS_ROOM },
+                                _ => CLASS_ROOM
                             },
                             to: Route::Conv{ room_id: *room_id },
                             room_data.name.as_str()

@@ -2,11 +2,11 @@ use pwhash::bcrypt;
 use rusqlite::Result;
 
 use crate::{
-    db::MyConnection,
+    database::Database,
     user::{new_api_key, new_api_key_2, AuthKey},
 };
 
-impl MyConnection {
+impl Database {
     pub fn validate_user_with_api_key<'a, 'b>(
         &'a self,
         user_id: i64,
