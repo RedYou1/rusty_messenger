@@ -157,13 +157,13 @@ async fn get_events(
 
     ApiResponseEvents::Ok(EventStream! {
         for room in rooms {
-            yield Event::json(&room.serialize());
+            yield Event::data(room.serialize());
         };
         for message in messages {
-            yield Event::json(&message.serialize());
+            yield Event::data(message.serialize());
         };
         loop {
-            yield Event::json(&select! {
+            yield Event::data(select! {
                 message = event_receiver.recv() => match message {
                     Ok(message) => message,
                     Err(RecvError::Closed) => {

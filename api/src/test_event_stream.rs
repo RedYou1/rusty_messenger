@@ -25,7 +25,7 @@ impl<'a> TestEventStream<'a> {
         }
         match line {
             Some(line) => {
-                let value = parse(parse(&line[5..]).unwrap().as_str().unwrap()).unwrap();
+                let value = parse(&line[5..]).unwrap();
 
                 match EventMessage::parse(&value) {
                     Ok(message) => Ok(Some(message)),

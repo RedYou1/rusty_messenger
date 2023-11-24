@@ -48,13 +48,7 @@ impl MyEventSource {
                 Box::new(move |_| error.set_state(SourceState::Error)) as Box<dyn FnMut(Event)>
             ),
             messageF: Closure::wrap(Box::new(move |event: MessageEvent| {
-                let value = json::parse(
-                    json::parse(event.data().as_string().unwrap().as_str())
-                        .unwrap()
-                        .as_str()
-                        .unwrap(),
-                )
-                .unwrap();
+                let value = json::parse(event.data().as_string().unwrap().as_str()).unwrap();
 
                 match EventMessage::parse(&value) {
                     Ok(EventMessage::Room(room)) => room_sender_thread.set_state(room),
