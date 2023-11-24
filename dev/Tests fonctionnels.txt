@@ -1,2 +1,16 @@
 units tests de l'api (cargo tests dans api)
 répliqué les tests avec l'interface
+
+
+tester connection user (message d'erreur)
+creer mauvais user (message d'erreur)
+creer correct user
+deconnection
+tester connection user mauvais mot de passe (message d'erreur)
+reconnection
+cree mauvais salon (message d'erreur)
+cree salon
+invitation user inexistant (message d'erreur)
+invitation user
+envoie de message vide (message d'erreur)
+envoie de message (reception du message pour les deux users)

@@ -66,7 +66,7 @@ pub struct FormAddUser {
 }
 
 impl Database {
-    pub fn add_user<'a>(&'a self, user: FormAddUser) -> Result<AuthKey> {
+    pub fn add_user(&self, user: FormAddUser) -> Result<AuthKey> {
         let napi = new_api_key();
 
         self.connection.execute(
@@ -84,19 +84,19 @@ impl Database {
         })
     }
 
-    pub fn logout<'a>(&'a self, user_id: i64) -> Result<usize> {
+    pub fn logout(&self, user_id: i64) -> Result<usize> {
         self.user_update_api_key("", user_id)
     }
 
-    pub fn user_select_id<'a>(&'a self, user_id: i64) -> Result<UserPass, String> {
+    pub fn user_select_id(&self, user_id: i64) -> Result<UserPass, String> {
         let mut stmt = self
             .connection
             .prepare("SELECT id, username, password, api_key FROM user WHERE id = ?1")
-            .map_err(|_| format!("cant prepare the querry"))?;
+            .map_err(|_| String::from("cant prepare the querry"))?;
 
         let mut rows = stmt
             .query_map([user_id], map_user_pass)
-            .map_err(|_| format!("cant execute the querry"))?;
+            .map_err(|_| String::from("cant execute the querry"))?;
 
         match rows.next() {
             Some(Ok(bd_user)) => Ok(bd_user),
@@ -104,15 +104,15 @@ impl Database {
         }
     }
 
-    pub fn user_select_username<'a, 'b>(&'a self, username: &'b str) -> Result<UserPass, String> {
+    pub fn user_select_username(&self, username: &str) -> Result<UserPass, String> {
         let mut stmt = self
             .connection
             .prepare("SELECT id, username, password, api_key FROM user WHERE username = ?1")
-            .map_err(|_| format!("cant prepare the querry"))?;
+            .map_err(|_| String::from("cant prepare the querry"))?;
 
         let mut rows = stmt
             .query_map([username], map_user_pass)
-            .map_err(|_| format!("cant execute the querry"))?;
+            .map_err(|_| String::from("cant execute the querry"))?;
 
         match rows.next() {
             Some(Ok(bd_user)) => Ok(bd_user),
@@ -120,7 +120,7 @@ impl Database {
         }
     }
 
-    pub fn user_update_api_key<'a, 'b>(&'a self, api_key: &'b str, user_id: i64) -> Result<usize> {
+    pub fn user_update_api_key(&self, api_key: &str, user_id: i64) -> Result<usize> {
         self.connection.execute(
             "
         UPDATE user

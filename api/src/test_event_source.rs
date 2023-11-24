@@ -7,12 +7,12 @@ use rocket::tokio::io::{AsyncBufReadExt, BufReader};
 use crate::user::UserPass;
 
 #[derive(Debug)]
-pub struct TestEventStream<'a> {
+pub struct TestEventSource<'a> {
     username: String,
     stream: Lines<BufReader<LocalResponse<'a>>>,
 }
 
-impl<'a> TestEventStream<'a> {
+impl<'a> TestEventSource<'a> {
     async fn next(&mut self) -> Result<Option<EventMessage>, String> {
         let mut line: Option<String> = None;
         for _ in 0..5 {
@@ -72,7 +72,7 @@ impl<'a> TestEventStream<'a> {
 pub async fn listen_events<'c>(
     client: &'c Client,
     user: &UserPass,
-) -> Result<TestEventStream<'c>, String> {
+) -> Result<TestEventSource<'c>, String> {
     let response = client
         .get(format!(
             "/events/{}?api_key={}",
@@ -83,7 +83,7 @@ pub async fn listen_events<'c>(
         .await;
 
     match response.status().code {
-        200 => Ok(TestEventStream {
+        200 => Ok(TestEventSource {
             username: user.username.to_string(),
             stream: BufReader::new(response).lines(),
         }),

@@ -8,7 +8,7 @@ use rocket::local::asynchronous::{Client, LocalResponse};
 use std::sync::Once;
 use std::{env, fs};
 
-use crate::test_event_stream::listen_events;
+use crate::test_event_source::listen_events;
 use crate::user::UserPass;
 
 use super::*;
@@ -271,7 +271,7 @@ pub fn initialize() {
     });
 }
 
-async fn add_user<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPass, String> {
+async fn add_user(client: &Client, login: &FormAddUser) -> Result<UserPass, String> {
     let response = client
         .post(uri!(post_user))
         .header(ContentType::Form)
@@ -291,7 +291,7 @@ async fn add_user<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPas
     }
 }
 
-async fn get_user<'c>(client: &'c Client, id: i64) -> Result<String, String> {
+async fn get_user(client: &Client, id: i64) -> Result<String, String> {
     let response = client.get(format!("/user/{}", id)).dispatch().await;
     let status = response.status().code;
     let result = into_json(response).await;
@@ -301,7 +301,7 @@ async fn get_user<'c>(client: &'c Client, id: i64) -> Result<String, String> {
     }
 }
 
-async fn login<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPass, String> {
+async fn login(client: &Client, login: &FormAddUser) -> Result<UserPass, String> {
     let response = client
         .post(uri!(post_login))
         .header(ContentType::Form)
@@ -322,7 +322,7 @@ async fn login<'c>(client: &'c Client, login: &FormAddUser) -> Result<UserPass, 
 }
 
 impl UserPass {
-    async fn addroom<'c>(&mut self, client: &'c Client, name: String) -> Result<Room, String> {
+    async fn addroom(&mut self, client: &Client, name: String) -> Result<Room, String> {
         let room = FormAddRoom {
             user_id: self.id,
             api_key: self.api_key.to_string(),
@@ -348,9 +348,9 @@ impl UserPass {
         }
     }
 
-    async fn invite<'c>(
+    async fn invite(
         &mut self,
-        client: &'c Client,
+        client: &Client,
         other_user: String,
         room: i64,
     ) -> Result<(), String> {
@@ -378,9 +378,9 @@ impl UserPass {
         }
     }
 
-    async fn addmessage<'c>(
+    async fn addmessage(
         &mut self,
-        client: &'c Client,
+        client: &Client,
         room_id: i64,
         text: String,
     ) -> Result<Message, String> {
@@ -414,7 +414,7 @@ impl UserPass {
     }
 }
 
-pub async fn into_json<'c>(res: LocalResponse<'c>) -> JsonValue {
+pub async fn into_json(res: LocalResponse<'_>) -> JsonValue {
     let res = res.into_string().await.unwrap();
     json::parse(res.as_str()).unwrap()
 }

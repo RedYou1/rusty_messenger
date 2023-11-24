@@ -16,7 +16,7 @@ pub struct FormMessage {
 }
 
 impl Database {
-    pub fn add_message<'a, 'b>(&'a self, form: FormMessage) -> Result<Message> {
+    pub fn add_message(&self, form: FormMessage) -> Result<Message> {
         let now = Utc::now();
         self.connection.execute(
             "INSERT INTO message (date, room_id, user_id, text) VALUES (?1, ?2, ?3, ?4)",

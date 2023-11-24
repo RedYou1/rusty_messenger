@@ -24,7 +24,7 @@ pub struct FormAddUserRoom {
 }
 
 impl Database {
-    pub fn add_room<'a>(&'a self, form: FormAddRoom) -> Result<Room> {
+    pub fn add_room(&self, form: FormAddRoom) -> Result<Room> {
         self.connection
             .execute("INSERT INTO room (name) VALUES (?1)", (form.name.as_str(),))?;
 
@@ -41,7 +41,7 @@ impl Database {
         Ok(new_room)
     }
 
-    pub fn add_user_room<'a>(&'a self, form: FormAddUserRoom) -> Result<(Room, i64), String> {
+    pub fn add_user_room(&self, form: FormAddUserRoom) -> Result<(Room, i64), String> {
         let room = self.room_select_id(form.room_id)?;
         let other_user = self.user_select_username(form.other_user_username.as_str())?;
 
@@ -55,23 +55,23 @@ impl Database {
         }
     }
 
-    pub fn room_select_id<'a>(&'a self, room_id: i64) -> Result<Room, String> {
+    pub fn room_select_id(&self, room_id: i64) -> Result<Room, String> {
         let mut stmt = self
             .connection
             .prepare("SELECT id, name FROM room WHERE id = ?1")
-            .map_err(|_| format!("cant prepare"))?;
+            .map_err(|_| String::from("cant prepare"))?;
 
         let mut rows = stmt
             .query_map([room_id], map_room)
-            .map_err(|_| format!("cant querry"))?;
+            .map_err(|_| String::from("cant querry"))?;
 
         match rows.next() {
             Some(Ok(bd_room)) => Ok(bd_room),
-            _ => Err(format!("no room with the id {}", room_id)),
+            _ => Err(String::from("no room with the id {}", room_id)),
         }
     }
 
-    pub fn select_users_room<'a>(&'a self, room_id: i64) -> Result<Vec<i64>> {
+    pub fn select_users_room(&self, room_id: i64) -> Result<Vec<i64>> {
         let mut stmt = self
             .connection
             .prepare("SELECT user_id FROM user_room WHERE room_id = ?1")?;
