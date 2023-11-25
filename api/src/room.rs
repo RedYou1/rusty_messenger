@@ -67,7 +67,7 @@ impl Database {
 
         match rows.next() {
             Some(Ok(bd_room)) => Ok(bd_room),
-            _ => Err(String::from("no room with the id {}", room_id)),
+            _ => Err(format!("no room with the id {}", room_id)),
         }
     }
 

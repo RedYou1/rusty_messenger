@@ -1,6 +1,6 @@
 use dioxus::prelude::Scope;
 use dioxus::prelude::*;
-use dioxus_router::prelude::{use_navigator, Link};
+use dioxus_router::prelude::{use_navigator, Link, Navigator};
 
 use crate::room::OpRoomId;
 use crate::structs::User;
@@ -13,50 +13,8 @@ pub fn CreateUser(cx: Scope) -> Element {
     let account_manager = use_shared_state::<AccountManager>(cx).unwrap();
     let username = use_state(cx, || String::new());
     let password = use_state(cx, || String::new());
-    let error = use_state(cx, || None);
+    let error = use_state::<Option<String>>(cx, || None);
     let navigator = use_navigator(cx);
-
-    let send = move |_| {
-        if username.is_empty() {
-            error.set(Some(String::from("Empty username")));
-            return;
-        }
-        if password.is_empty() {
-            error.set(Some(String::from("Empty password")));
-            return;
-        }
-
-        let form = serialize_login(username.to_string(), password.to_string());
-
-        let account_manager = account_manager.to_owned();
-        let username = username.to_owned();
-        let error = error.to_owned();
-        let url = format!("{BASE_API_URL}/user");
-        let navigator = navigator.to_owned();
-        cx.spawn(async move {
-            match reqwest::Client::new().post(&url).form(&form).send().await {
-                Ok(response) => {
-                    let status = response.status().as_u16();
-                    let response_body = response.text().await.unwrap();
-                    let response_data = json::parse(response_body.as_str()).unwrap();
-                    match status {
-                        201 => {
-                            account_manager.write().set_current_user(Some(User {
-                                id: response_data["user_id"].as_i64().unwrap(),
-                                username: username.to_string(),
-                                api_key: response_data["api_key"].as_str().unwrap().to_string(),
-                            }));
-                            navigator.replace(Route::SideBar {
-                                room_id: OpRoomId::new_empty(),
-                            });
-                        }
-                        _ => error.set(Some(response_data["reason"].as_str().unwrap().to_string())),
-                    }
-                }
-                Err(_) => error.set(Some(String::from("Request Timeout"))),
-            }
-        });
-    };
 
     render! {
         div{
@@ -90,7 +48,7 @@ pub fn CreateUser(cx: Scope) -> Element {
                 button {
                     id: "send",
                     prevent_default: "onclick",
-                    onclick: send,
+                    onclick: move |_| create_user(cx, navigator.to_owned(), account_manager.to_owned(), username.to_owned(), password, error.to_owned()),
                     "Send"
                 }
             }
@@ -100,4 +58,49 @@ pub fn CreateUser(cx: Scope) -> Element {
             }
         }
     }
+}
+
+fn create_user<T>(
+    cx: Scope<T>,
+    navigator: Navigator,
+    account_manager: UseSharedState<AccountManager>,
+    username: UseState<String>,
+    password: &UseState<String>,
+    error: UseState<Option<String>>,
+) {
+    if username.is_empty() {
+        error.set(Some(String::from("Empty username")));
+        return;
+    }
+    if password.is_empty() {
+        error.set(Some(String::from("Empty password")));
+        return;
+    }
+
+    let form = serialize_login(username.to_string(), password.to_string());
+
+    let url = format!("{BASE_API_URL}/user");
+    cx.spawn(async move {
+        match reqwest::Client::new().post(&url).form(&form).send().await {
+            Ok(response) => {
+                let status = response.status().as_u16();
+                let response_body = response.text().await.unwrap();
+                let response_data = json::parse(response_body.as_str()).unwrap();
+                match status {
+                    201 => {
+                        account_manager.write().set_current_user(Some(User {
+                            id: response_data["user_id"].as_i64().unwrap(),
+                            username: username.to_string(),
+                            api_key: response_data["api_key"].as_str().unwrap().to_string(),
+                        }));
+                        navigator.replace(Route::SideBar {
+                            room_id: OpRoomId::new_empty(),
+                        });
+                    }
+                    _ => error.set(Some(response_data["reason"].as_str().unwrap().to_string())),
+                }
+            }
+            Err(_) => error.set(Some(String::from("Request Timeout"))),
+        }
+    });
 }

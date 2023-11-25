@@ -31,96 +31,8 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
 
     let username = use_state(cx, || String::new());
     let message = use_state(cx, || String::new());
-    let error_invite = use_state(cx, || None);
-    let error_message = use_state(cx, || None);
-
-    let send_message = move |_| {
-        let account_manager = account_manager.to_owned();
-        let message = message.to_owned();
-        if message.is_empty() {
-            error_message.set(Some(String::from("Empty message")));
-            return;
-        }
-        let form: HashMap<&str, String> = {
-            let lock = account_manager.read();
-            let current_user = lock.current_user().unwrap();
-            serialize_message(
-                *room_id,
-                current_user.id,
-                current_user.api_key.to_string(),
-                message.to_string(),
-            )
-        };
-
-        let url = format!("{BASE_API_URL}/message");
-        let error = error_message.to_owned();
-        cx.spawn(async move {
-            match reqwest::Client::new().post(&url).form(&form).send().await {
-                Ok(response) => {
-                    let status = response.status().as_u16();
-                    let response_body = response.text().await.unwrap();
-                    let response_data = json::parse(response_body.as_str()).unwrap();
-                    match status {
-                        201 => {
-                            account_manager.write_silent().set_api_key(
-                                response_data["api_key"].as_str().unwrap().to_string(),
-                            );
-                            error.set(None);
-                            message.set(String::new());
-                        }
-                        _ => error.set(Some(response_data["reason"].as_str().unwrap().to_string())),
-                    }
-                }
-                Err(_) => error.set(Some(String::from("Request Timeout"))),
-            }
-        });
-    };
-
-    let send_invite = move |_| {
-        let account_manager = account_manager.to_owned();
-        let username = username.to_owned();
-        if username.is_empty() {
-            error_invite.set(Some(String::from("Empty username")));
-            return;
-        }
-        let form: HashMap<&str, String> = {
-            let lock = account_manager.read();
-            let current_user = lock.current_user().unwrap();
-            HashMap::<&'static str, String>::from([
-                ("user_id", current_user.id.to_string()),
-                ("api_key", current_user.api_key.to_string()),
-                ("other_user_username", username.to_string()),
-                ("room_id", room_id.to_string()),
-            ])
-        };
-
-        let url = format!("{BASE_API_URL}/invite");
-        let error_invite = error_invite.to_owned();
-        cx.spawn(async move {
-            match reqwest::Client::new().post(&url).form(&form).send().await {
-                Ok(response) => {
-                    let status = response.status().as_u16();
-                    let response_body = response.text().await.unwrap();
-                    let response_data = json::parse(response_body.as_str()).unwrap();
-                    match response_data["api_key"].as_str() {
-                        Some(api_key) => account_manager
-                            .write_silent()
-                            .set_api_key(api_key.to_string()),
-                        None => {}
-                    }
-                    match status {
-                        201 => {
-                            error_invite.set(None);
-                            username.set(String::new());
-                        }
-                        _ => error_invite
-                            .set(Some(response_data["reason"].as_str().unwrap().to_string())),
-                    }
-                }
-                Err(_) => error_invite.set(Some(String::from("Request Timeout"))),
-            }
-        });
-    };
+    let error_invite = use_state::<Option<String>>(cx, || None);
+    let error_message = use_state::<Option<String>>(cx, || None);
 
     render! {
         SideBar{room_id: OpRoomId::from(*room_id) }
@@ -154,7 +66,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                 button {
                     id: "send",
                     prevent_default: "onclick",
-                    onclick: send_invite,
+                    onclick: move |_| send_invite(cx, account_manager.to_owned(), username.to_owned(), room_id, error_invite.to_owned()),
                     "Send"
                 }
             }
@@ -190,7 +102,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                 button {
                     id: "send",
                     prevent_default: "onclick",
-                    onclick: send_message,
+                    onclick: move |_| send_message(cx, account_manager.to_owned(), message.to_owned(), room_id, error_message.to_owned()),
                     "Send"
                 }
             }
@@ -198,8 +110,99 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
     }
 }
 
-const MESSAGE_ME: &'static str = "messageMe";
-const MESSAGE_OTHER: &'static str = "messageOther";
+fn send_message<T>(
+    cx: Scope<T>,
+    account_manager: UseSharedState<AccountManager>,
+    message: UseState<String>,
+    room_id: &i64,
+    error_message: UseState<Option<String>>,
+) {
+    if message.is_empty() {
+        error_message.set(Some(String::from("Empty message")));
+        return;
+    }
+    let form: HashMap<&str, String> = {
+        let lock = account_manager.read();
+        let current_user = lock.current_user().unwrap();
+        serialize_message(
+            *room_id,
+            current_user.id,
+            current_user.api_key.to_string(),
+            message.to_string(),
+        )
+    };
+
+    let url = format!("{BASE_API_URL}/message");
+    cx.spawn(async move {
+        match reqwest::Client::new().post(&url).form(&form).send().await {
+            Ok(response) => {
+                let status = response.status().as_u16();
+                let response_body = response.text().await.unwrap();
+                let response_data = json::parse(response_body.as_str()).unwrap();
+                match status {
+                    201 => {
+                        account_manager
+                            .write_silent()
+                            .set_api_key(response_data["api_key"].as_str().unwrap().to_string());
+                        error_message.set(None);
+                        message.set(String::new());
+                    }
+                    _ => error_message.set(Some(response_data["reason"].as_str().unwrap().to_string())),
+                }
+            }
+            Err(_) => error_message.set(Some(String::from("Request Timeout"))),
+        }
+    });
+}
+
+fn send_invite<T>(
+    cx: Scope<T>,
+    account_manager: UseSharedState<AccountManager>,
+    username: UseState<String>,
+    room_id: &i64,
+    error_invite: UseState<Option<String>>,
+) {
+    if username.is_empty() {
+        error_invite.set(Some(String::from("Empty username")));
+        return;
+    }
+    let form: HashMap<&str, String> = {
+        let lock = account_manager.read();
+        let current_user = lock.current_user().unwrap();
+        HashMap::<&'static str, String>::from([
+            ("user_id", current_user.id.to_string()),
+            ("api_key", current_user.api_key.to_string()),
+            ("other_user_username", username.to_string()),
+            ("room_id", room_id.to_string()),
+        ])
+    };
+
+    let url = format!("{BASE_API_URL}/invite");
+    cx.spawn(async move {
+        match reqwest::Client::new().post(&url).form(&form).send().await {
+            Ok(response) => {
+                let status = response.status().as_u16();
+                let response_body = response.text().await.unwrap();
+                let response_data = json::parse(response_body.as_str()).unwrap();
+                match response_data["api_key"].as_str() {
+                    Some(api_key) => account_manager
+                        .write_silent()
+                        .set_api_key(api_key.to_string()),
+                    None => {}
+                }
+                match status {
+                    201 => {
+                        error_invite.set(None);
+                        username.set(String::new());
+                    }
+                    _ => error_invite
+                        .set(Some(response_data["reason"].as_str().unwrap().to_string())),
+                }
+            }
+            Err(_) => error_invite.set(Some(String::from("Request Timeout"))),
+        }
+    });
+}
 
 fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
     let users = use_shared_state::<Users>(cx).unwrap();
@@ -210,13 +213,11 @@ fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
         users.write().0.insert(message_user_id, Some(username));
     });
 
-    let username = {
-        users
-            .read()
-            .0
-            .get(&message_user_id)
-            .map(|username| username.as_ref().map(|username| username.to_string()))
-    };
+    let username = users
+        .read()
+        .0
+        .get(&message_user_id)
+        .map(|username| username.as_ref().map(|username| username.to_string()));
     let username = match username {
         Some(Some(username)) => username,
         Some(None) => String::from("Loading..."),
@@ -240,6 +241,9 @@ fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
             String::from("Loading...")
         }
     };
+
+    const MESSAGE_ME: &'static str = "messageMe";
+    const MESSAGE_OTHER: &'static str = "messageOther";
 
     render! {
         div{

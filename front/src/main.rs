@@ -111,6 +111,5 @@ fn PageNotFound(cx: Scope, route: Vec<String>) -> Element {
 }
 
 fn main() {
-    // launch the web app
     dioxus_web::launch(page);
 }
