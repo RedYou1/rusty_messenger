@@ -9,6 +9,7 @@ mod tests;
 mod auth;
 mod cors;
 mod database;
+mod date_time_sql;
 mod message;
 mod room;
 mod user;
@@ -250,7 +251,7 @@ async fn post_invite(
 
 static mut IS_UNIT_TEST: bool = false;
 fn connection() -> Database {
-    unsafe { Database::new(IS_UNIT_TEST).unwrap() }
+    Database::new(unsafe { IS_UNIT_TEST }).unwrap()
 }
 
 pub fn build(is_unit_test: bool) -> Rocket<Build> {

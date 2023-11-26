@@ -55,6 +55,19 @@ impl Database {
         }
     }
 
+    pub fn load_rooms(&self, user_id: i64) -> Result<Vec<Room>> {
+        let mut stmt = self.connection.prepare("SELECT room.id, room.name FROM user_room INNER JOIN room on room.id = user_room.room_id WHERE user_id = ?1")?;
+        let rows = stmt.query([user_id])?;
+
+        rows.mapped(|row| {
+            Ok(Room {
+                id: row.get::<usize, i64>(0)?,
+                name: row.get::<usize, String>(1)?,
+            })
+        })
+        .collect()
+    }
+
     pub fn room_select_id(&self, room_id: i64) -> Result<Room, String> {
         let mut stmt = self
             .connection

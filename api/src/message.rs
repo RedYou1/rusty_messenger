@@ -3,7 +3,7 @@ use lib::Message;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Result, Row};
 
-use crate::database::{DateTimeSql, Database};
+use crate::{database::Database, date_time_sql::DateTimeSql};
 
 #[derive(Debug, Clone, FromForm, Serialize, Deserialize)]
 #[cfg_attr(test, derive(PartialEq, UriDisplayQuery))]

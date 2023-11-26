@@ -60,6 +60,7 @@ pub fn CreateUser(cx: Scope) -> Element {
     }
 }
 
+/// Envoie une requête de création d'utilisateur et se connecte si la requête réussie
 fn create_user<T>(
     cx: Scope<T>,
     navigator: Navigator,

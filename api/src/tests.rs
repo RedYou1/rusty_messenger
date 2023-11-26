@@ -8,7 +8,7 @@ use rocket::local::asynchronous::{Client, LocalResponse};
 use std::sync::Once;
 use std::{env, fs};
 
-use crate::test_event_source::listen_events;
+use crate::test_event_source::TestEventSource;
 use crate::user::UserPass;
 
 use super::*;
@@ -24,8 +24,8 @@ pub fn next_room_id() -> i64 {
 
 #[async_test]
 async fn test_adduser() {
-    initialize();
-    let client = Client::tracked(build(true)).await.unwrap();
+    let client = initialize().await;
+
     let form_user = FormAddUser {
         username: "test_adduser".to_string(),
         password: "test_adduser".to_string(),
@@ -41,8 +41,7 @@ async fn test_adduser() {
 
 #[async_test]
 async fn test_login() {
-    initialize();
-    let client = Client::tracked(build(true)).await.unwrap();
+    let client = initialize().await;
 
     let form_user = FormAddUser {
         username: "test_login".to_string(),
@@ -69,8 +68,7 @@ async fn test_login() {
 
 #[async_test]
 async fn test_room() {
-    initialize();
-    let client = Client::tracked(build(true)).await.unwrap();
+    let client = initialize().await;
 
     assert_eq!(
         UserPass {
@@ -88,8 +86,7 @@ async fn test_room() {
 
 #[async_test]
 async fn test_invite() {
-    initialize();
-    let client = Client::tracked(build(true)).await.unwrap();
+    let client = initialize().await;
 
     assert_eq!(
         UserPass {
@@ -161,8 +158,7 @@ async fn test_invite() {
 
 #[async_test]
 async fn test_wrong_event() {
-    initialize();
-    let client = Client::tracked(build(true)).await.unwrap();
+    let client = initialize().await;
 
     let user_1 = add_user(
         &client,
@@ -175,7 +171,7 @@ async fn test_wrong_event() {
     .unwrap();
 
     assert_eq!(
-        listen_events(
+        TestEventSource::new(
             &client,
             &UserPass {
                 id: user_1.id,
@@ -192,8 +188,7 @@ async fn test_wrong_event() {
 
 #[async_test]
 async fn test_event() {
-    initialize();
-    let client = Client::tracked(build(true)).await.unwrap();
+    let client = initialize().await;
 
     let mut user_1 = add_user(
         &client,
@@ -210,7 +205,7 @@ async fn test_event() {
         .await
         .unwrap();
 
-    let mut user_1_events = listen_events(&client, &user_1).await.unwrap();
+    let mut user_1_events = TestEventSource::new(&client, &user_1).await.unwrap();
     user_1_events
         .test_next(EventMessage::Room(room.clone()))
         .await;
@@ -239,7 +234,7 @@ async fn test_event() {
         .await
         .unwrap();
 
-    let mut user_2_events = listen_events(&client, &user_2).await.unwrap();
+    let mut user_2_events = TestEventSource::new(&client, &user_2).await.unwrap();
     user_2_events
         .test_next(EventMessage::Room(room.clone()))
         .await;
@@ -261,7 +256,7 @@ async fn test_event() {
 
 static INIT: Once = Once::new();
 
-pub fn initialize() {
+pub async fn initialize() -> Client {
     INIT.call_once(|| {
         dotenv().unwrap();
         let database_url = env::var("DATABASE_URL_TEST").unwrap();
@@ -269,6 +264,7 @@ pub fn initialize() {
             fs::remove_file(database_url).unwrap();
         }
     });
+    Client::tracked(build(true)).await.unwrap()
 }
 
 async fn add_user(client: &Client, login: &FormAddUser) -> Result<UserPass, String> {

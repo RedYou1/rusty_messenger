@@ -4,20 +4,21 @@ use dioxus::prelude::{use_coroutine, Coroutine, Scoped, UseSharedState};
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_lite::StreamExt;
 
+/// Gère les états entre les processus
 pub struct AsyncStateSetter<Value>(Arc<Mutex<Coroutine<Value>>>);
 
 impl<Value> AsyncStateSetter<Value>
 where
     Value: 'static,
 {
-    pub fn new<T, Container, Func>(
+    pub fn new<T, Container, Funcion>(
         cx: &Scoped<'_, T>,
         state: &UseSharedState<Container>,
-        func: Func,
+        set_state_function: Funcion,
     ) -> AsyncStateSetter<Value>
     where
         Container: 'static,
-        Func: Fn(&UseSharedState<Container>, Value) + 'static,
+        Funcion: Fn(&UseSharedState<Container>, Value) + 'static,
     {
         let state = state.to_owned();
         AsyncStateSetter::<Value> {
@@ -25,7 +26,7 @@ where
                 use_coroutine(cx, |mut receiver: UnboundedReceiver<Value>| async move {
                     loop {
                         match receiver.next().await {
-                            Some(v) => func(&state, v),
+                            Some(v) => set_state_function(&state, v),
                             None => panic!("AsyncStateSetter receive None"),
                         }
                     }

@@ -48,7 +48,7 @@ pub enum Route {
 pub struct Rooms(HashMap<i64, RoomData>);
 pub struct Users(HashMap<i64, Option<String>>);
 
-fn page(cx: Scope) -> Element {
+fn window(cx: Scope) -> Element {
     let _ = use_shared_state_provider::<Rooms>(cx, || Rooms {
         0: HashMap::<i64, RoomData>::new(),
     });
@@ -111,5 +111,5 @@ fn PageNotFound(cx: Scope, route: Vec<String>) -> Element {
 }
 
 fn main() {
-    dioxus_web::launch(page);
+    dioxus_web::launch(window);
 }

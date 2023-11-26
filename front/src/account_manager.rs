@@ -6,6 +6,7 @@ use crate::{
     structs::User,
 };
 
+/// Gère le système d'authentification de l'utilisateur
 pub struct AccountManager {
     current_user: Option<User>,
     try_tentative: i64,

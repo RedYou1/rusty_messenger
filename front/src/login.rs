@@ -66,6 +66,7 @@ pub fn LogIn(cx: Scope) -> Element {
     }
 }
 
+/// Envoie une requête de connexion d'utilisateur et se connecte si la requête réussie
 fn login<T>(
     cx: Scope<T>,
     navigator: Navigator,

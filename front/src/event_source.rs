@@ -6,16 +6,16 @@ use crate::{async_state::AsyncStateSetter, BASE_API_URL};
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum SourceState {
-    Error = 0b000,
-    ReConnecting = 0b01,
-    Connected = 0b10,
+    Error,
+    ReConnecting,
+    Connected,
 }
 
 pub struct MyEventSource {
     source: EventSource,
-    openF: Closure<dyn FnMut()>,
-    errorF: Closure<dyn FnMut(Event)>,
-    messageF: Closure<dyn FnMut(MessageEvent)>,
+    open_function: Closure<dyn FnMut()>,
+    error_function: Closure<dyn FnMut(Event)>,
+    message_function: Closure<dyn FnMut(MessageEvent)>,
 }
 
 impl MyEventSource {
@@ -41,13 +41,13 @@ impl MyEventSource {
 
         let source = MyEventSource {
             source: EventSource::new(message_url.as_str()).unwrap(),
-            openF: Closure::wrap(
+            open_function: Closure::wrap(
                 Box::new(move || open.set_state(SourceState::Connected)) as Box<dyn FnMut()>
             ),
-            errorF: Closure::wrap(
+            error_function: Closure::wrap(
                 Box::new(move |_| error.set_state(SourceState::Error)) as Box<dyn FnMut(Event)>
             ),
-            messageF: Closure::wrap(Box::new(move |event: MessageEvent| {
+            message_function: Closure::wrap(Box::new(move |event: MessageEvent| {
                 let value = json::parse(event.data().as_string().unwrap().as_str()).unwrap();
 
                 match EventMessage::parse(&value) {
@@ -60,13 +60,13 @@ impl MyEventSource {
 
         source
             .source
-            .set_onopen(Some(source.openF.as_ref().unchecked_ref()));
+            .set_onopen(Some(source.open_function.as_ref().unchecked_ref()));
         source
             .source
-            .set_onerror(Some(source.errorF.as_ref().unchecked_ref()));
+            .set_onerror(Some(source.error_function.as_ref().unchecked_ref()));
         source
             .source
-            .set_onmessage(Some(source.messageF.as_ref().unchecked_ref()));
+            .set_onmessage(Some(source.message_function.as_ref().unchecked_ref()));
         source
     }
 }
