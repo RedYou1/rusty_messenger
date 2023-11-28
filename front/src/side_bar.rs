@@ -92,7 +92,7 @@ fn create_room<T>(
     }
     let form: HashMap<&str, String> = {
         let account_manager = account_manager.read();
-        let current_user = account_manager.current_user().unwrap();
+        let current_user = account_manager.utilisateur_actuelle().unwrap();
         HashMap::<&'static str, String>::from([
             ("user_id", current_user.id.to_string()),
             ("api_key", current_user.api_key.to_string()),
@@ -111,7 +111,7 @@ fn create_room<T>(
                     201 => {
                         account_manager
                             .write_silent()
-                            .set_api_key(response_data["api_key"].as_str().unwrap().to_string());
+                            .modifier_api_key(response_data["api_key"].as_str().unwrap().to_string());
                         error.set(None);
                         name.set(String::new());
                     }

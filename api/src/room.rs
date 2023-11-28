@@ -24,7 +24,8 @@ pub struct FormAddUserRoom {
 }
 
 impl Database {
-    pub fn add_room(&self, form: FormAddRoom) -> Result<Room> {
+    /// Crée un salon et ajout l'utilisateur qui l'a créé
+    pub fn ajout_room(&self, form: FormAddRoom) -> Result<Room> {
         self.connection
             .execute("INSERT INTO room (name) VALUES (?1)", (form.name.as_str(),))?;
 
@@ -41,7 +42,8 @@ impl Database {
         Ok(new_room)
     }
 
-    pub fn add_user_room(&self, form: FormAddUserRoom) -> Result<(Room, i64), String> {
+    /// Ajout un utilisateur dans un salon
+    pub fn ajout_user_room(&self, form: FormAddUserRoom) -> Result<(Room, i64), String> {
         let room = self.room_select_id(form.room_id)?;
         let other_user = self.user_select_username(form.other_user_username.as_str())?;
 
@@ -55,7 +57,8 @@ impl Database {
         }
     }
 
-    pub fn load_rooms(&self, user_id: i64) -> Result<Vec<Room>> {
+    /// Récupère tous les salons qu'un utilisateur à access
+    pub fn recupere_rooms(&self, user_id: i64) -> Result<Vec<Room>> {
         let mut stmt = self.connection.prepare("SELECT room.id, room.name FROM user_room INNER JOIN room on room.id = user_room.room_id WHERE user_id = ?1")?;
         let rows = stmt.query([user_id])?;
 
@@ -68,6 +71,7 @@ impl Database {
         .collect()
     }
 
+    /// Récupère un salon
     pub fn room_select_id(&self, room_id: i64) -> Result<Room, String> {
         let mut stmt = self
             .connection
@@ -84,6 +88,7 @@ impl Database {
         }
     }
 
+    /// Récupère tous les utilisateurs d'un salon
     pub fn select_users_room(&self, room_id: i64) -> Result<Vec<i64>> {
         let mut stmt = self
             .connection

@@ -66,7 +66,8 @@ pub struct FormAddUser {
 }
 
 impl Database {
-    pub fn add_user(&self, user: FormAddUser) -> Result<AuthKey> {
+    /// Crée un utilisateur et lui crée une api_key
+    pub fn ajout_user(&self, user: FormAddUser) -> Result<AuthKey> {
         let napi = new_api_key();
 
         self.connection.execute(
@@ -84,10 +85,12 @@ impl Database {
         })
     }
 
+    /// Supprime l'api_key d'un utilisateur
     pub fn logout(&self, user_id: i64) -> Result<usize> {
         self.user_update_api_key("", user_id)
     }
 
+    /// Récupère tous les informations d'un utilisateur
     pub fn user_select_id(&self, user_id: i64) -> Result<UserPass, String> {
         let mut stmt = self
             .connection
@@ -104,6 +107,7 @@ impl Database {
         }
     }
 
+    /// Récupère le nom d'un utilisateur
     pub fn user_select_username(&self, username: &str) -> Result<UserPass, String> {
         let mut stmt = self
             .connection
@@ -120,6 +124,7 @@ impl Database {
         }
     }
 
+    /// Change l'api_key d'un utilisateur
     pub fn user_update_api_key(&self, api_key: &str, user_id: i64) -> Result<usize> {
         self.connection.execute(
             "

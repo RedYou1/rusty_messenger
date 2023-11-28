@@ -7,7 +7,8 @@ use crate::{
 };
 
 impl Database {
-    pub fn validate_user_with_api_key(
+    /// Permet de vérifier si l'utilisateur à la bonne api_key et de lui en donnée une nouvelle
+    pub fn verification_api_key_de_utilisateur(
         &self,
         user_id: i64,
         api_key: &str,
@@ -27,7 +28,8 @@ impl Database {
         }
     }
 
-    pub fn validate_login(
+    /// Permet de vérifier le mot de passe de l'utilisateur et de lui donnée une api_key
+    pub fn connecter_utilisateur(
         &self,
         username: &str,
         password: &str,

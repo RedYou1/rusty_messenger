@@ -88,10 +88,10 @@ fn window(cx: Scope) -> Element {
     });
 
     let account_manager = use_shared_state::<AccountManager>(cx).unwrap();
-    if account_manager.read().current_user().is_some() {
+    if account_manager.read().utilisateur_actuelle().is_some() {
         match *source_state.read() {
-            SourceState::Error => account_manager.write().retry_connection(),
-            SourceState::Connected => account_manager.write_silent().set_connected(),
+            SourceState::Error => account_manager.write().nouvelle_tentative_de_connection(),
+            SourceState::Connected => account_manager.write_silent().Mettre_est_connecter(),
             _ => {}
         }
     }

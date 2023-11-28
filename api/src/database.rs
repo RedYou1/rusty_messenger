@@ -3,6 +3,7 @@ use rusqlite::{Connection, Result};
 use std::env;
 use std::sync::Once;
 
+/// Gère la connection de la base de donnée SQLite
 pub struct Database {
     _private: (),
     pub connection: Connection,
@@ -11,7 +12,7 @@ pub struct Database {
 static mut DATABASE_URL: String = String::new();
 static INIT: Once = Once::new();
 
-fn database_url(is_unit_test: bool) -> &'static String {
+fn emplacement_base_de_donnee(is_unit_test: bool) -> &'static String {
     INIT.call_once(|| {
         dotenv().unwrap();
         let path = match is_unit_test {
@@ -30,11 +31,12 @@ impl Database {
     pub fn new(is_unit_test: bool) -> Result<Database> {
         Ok(Database {
             _private: (),
-            connection: Connection::open(database_url(is_unit_test))?,
+            connection: Connection::open(emplacement_base_de_donnee(is_unit_test))?,
         })
     }
 
-    pub fn create_tables(&self) -> Result<()> {
+    /// Crée les tables de la base de donnée
+    pub fn cree_tables(&self) -> Result<()> {
         self.connection.execute_batch(
             " 
             CREATE TABLE IF NOT EXISTS user

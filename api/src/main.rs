@@ -31,7 +31,7 @@ use user::FormAddUser;
 type EventStreams = RwLock<HashMap<i64, Sender<String>>>;
 
 #[derive(Debug, Responder)]
-enum ApiResponse {
+enum ReponseJson {
     #[response(status = 200, content_type = "json")]
     Ok(String),
     #[response(status = 201, content_type = "json")]
@@ -44,98 +44,103 @@ enum ApiResponse {
     Unauthorized(String),
 }
 
+/// Crée un utilisateur
 #[post("/user", data = "<form>")]
-fn post_user(form: Form<FormAddUser>) -> ApiResponse {
-    let bd_connection = connection();
-    match bd_connection.add_user(form.into_inner()) {
-        Ok(user) => ApiResponse::Created(format!(
+fn post_user(form: Form<FormAddUser>) -> ReponseJson {
+    let connection_bd = connection_bd();
+    match connection_bd.ajout_user(form.into_inner()) {
+        Ok(user) => ReponseJson::Created(format!(
             "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
             user.user_id, user.api_key
         )),
         Err(_) => {
-            ApiResponse::Unauthorized(String::from("{ \"reason\": \"Déjà pris\" }"))
+            ReponseJson::Unauthorized(String::from("{ \"reason\": \"Déjà pris\" }"))
         }
     }
 }
 
+/// Récupère le nom d'un utilisateur
 #[get("/user/<user_id>")]
-fn get_user(user_id: i64) -> ApiResponse {
-    let bd_connection = connection();
-    match bd_connection.user_select_id(user_id) {
-        Ok(user) => ApiResponse::Ok(format!(
+fn get_user(user_id: i64) -> ReponseJson {
+    let connection_bd = connection_bd();
+    match connection_bd.user_select_id(user_id) {
+        Ok(user) => ReponseJson::Ok(format!(
             "{{ \"user_id\": {}, \"username\": \"{}\" }}",
             user.id, user.username
         )),
-        Err(_) => ApiResponse::BadRequest(String::from("{ \"reason\": \"Mauvais id\" }")),
+        Err(_) => ReponseJson::BadRequest(String::from("{ \"reason\": \"Mauvais id\" }")),
     }
 }
 
+/// Connecte l'utilisateur (crée une api_key)
 #[post("/login", data = "<form>")]
-fn post_login(form: Form<FormAddUser>) -> ApiResponse {
-    let bd_connection = connection();
+fn post_login(form: Form<FormAddUser>) -> ReponseJson {
+    let connection_bd = connection_bd();
     let form = form.into_inner();
 
-    match bd_connection.validate_login(form.username.as_str(), form.password.as_str()) {
-        Ok(auth) => ApiResponse::Accepted(format!(
+    match connection_bd.connecter_utilisateur(form.username.as_str(), form.password.as_str()) {
+        Ok(auth) => ReponseJson::Accepted(format!(
             "{{ \"user_id\": {}, \"api_key\": \"{}\" }}",
             auth.user_id, auth.api_key
         )),
         Err(_) => {
-            ApiResponse::Unauthorized(String::from("{ \"reason\": \"Mauvais identifiant ou mot de passe\" }"))
+            ReponseJson::Unauthorized(String::from("{ \"reason\": \"Mauvais identifiant ou mot de passe\" }"))
         }
     }
 }
 
+/// Crée un salon
 #[post("/room", data = "<form>")]
-async fn post_room(form: Form<FormAddRoom>, convs: &State<EventStreams>) -> ApiResponse {
-    let bd_connection = connection();
+async fn post_room(form: Form<FormAddRoom>, convs: &State<EventStreams>) -> ReponseJson {
+    let connection_bd = connection_bd();
     let form = form.into_inner();
     let user_id = form.user_id;
 
-    let user = match bd_connection.validate_user_with_api_key(form.user_id, form.api_key.as_str()) {
+    let user = match connection_bd.verification_api_key_de_utilisateur(form.user_id, form.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
-            return ApiResponse::Unauthorized(String::from(
+            return ReponseJson::Unauthorized(String::from(
                 "{ \"reason\": \"Mauvais id ou api key\" }",
             ));
         }
     };
 
-    let room = bd_connection.add_room(form).unwrap();
+    let room = connection_bd.ajout_room(form).unwrap();
 
     let lock = convs.read().await;
     if let Some(event_stream) = lock.get(&user_id) {
         event_stream.send(room.serialize()).unwrap();
     }
 
-    ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
+    ReponseJson::Created(format!("{{ \"api_key\": \"{}\" }}", user))
 }
 
 #[derive(Responder)]
-enum ApiResponseEvents<T> {
+enum Reponse<T> {
     #[response(status = 200)]
     Ok(T),
-    #[response(status = 401)]
+    #[response(status = 401, content_type = "json")]
     Unauthorized(String),
 }
 
+/// Crée l'Event Stream
 #[get("/events/<user_id>?<api_key>")]
 async fn get_events(
     user_id: i64,
     api_key: String,
     event_streams: &State<EventStreams>,
     mut end: Shutdown,
-) -> ApiResponseEvents<EventStream![]> {
-    let bd_connection = connection();
+) -> Reponse<EventStream![]> {
+    let connection_bd = connection_bd();
 
-    let bd_user = match bd_connection.user_select_id(user_id) {
+    let bd_user = match connection_bd.user_select_id(user_id) {
         Ok(bd_user) => bd_user,
-        Err(_) => return ApiResponseEvents::Unauthorized(String::from("Mauvais id ou api key")),
+        Err(_) => return Reponse::Unauthorized(String::from("Mauvais id ou api key")),
     };
     let bd_api_key = bd_user.api_key.as_str();
 
     if bd_api_key.eq("") || !bd_api_key.eq(api_key.as_str()) {
-        return ApiResponseEvents::Unauthorized(String::from("Mauvais id ou api key"));
+        return Reponse::Unauthorized(String::from("Mauvais id ou api key"));
     }
 
     let mut event_receiver = match {
@@ -153,10 +158,10 @@ async fn get_events(
         }
     };
 
-    let messages = bd_connection.load_messages(user_id).unwrap();
-    let rooms = bd_connection.load_rooms(user_id).unwrap();
+    let messages = connection_bd.recupere_messages(user_id).unwrap();
+    let rooms = connection_bd.recupere_rooms(user_id).unwrap();
 
-    ApiResponseEvents::Ok(EventStream! {
+    Reponse::Ok(EventStream! {
         for room in rooms {
             yield Event::data(room.serialize());
         };
@@ -168,7 +173,7 @@ async fn get_events(
                 message = event_receiver.recv() => match message {
                     Ok(message) => message,
                     Err(RecvError::Closed) => {
-                        bd_connection.logout(user_id).unwrap();
+                        connection_bd.logout(user_id).unwrap();
                         break;
                     },
                     Err(RecvError::Lagged(_)) => continue,
@@ -179,26 +184,27 @@ async fn get_events(
     })
 }
 
+/// Envoie un message
 #[post("/message", data = "<form>")]
-async fn post_message(form: Form<FormMessage>, event_streams: &State<EventStreams>) -> ApiResponse {
-    let bd_connection = connection();
+async fn post_message(form: Form<FormMessage>, event_streams: &State<EventStreams>) -> ReponseJson {
+    let connection_bd = connection_bd();
     let form = form.into_inner();
     let room_id = form.room_id;
 
-    let user = match bd_connection.validate_user_with_api_key(form.user_id, form.api_key.as_str()) {
+    let user = match connection_bd.verification_api_key_de_utilisateur(form.user_id, form.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
-            return ApiResponse::Unauthorized(String::from(
+            return ReponseJson::Unauthorized(String::from(
                 "{ \"reason\": \"Mauvais id ou api key\" }",
             ));
         }
     };
 
-    let message = bd_connection.add_message(form).unwrap().serialize();
-    let users = match bd_connection.select_users_room(room_id) {
+    let message = connection_bd.ajout_message(form).unwrap().serialize();
+    let users = match connection_bd.select_users_room(room_id) {
         Ok(users) => users,
         Err(_) => {
-            return ApiResponse::BadRequest(String::from("{ \"reason\": \"Ce salon n'exists pas\" }"))
+            return ReponseJson::BadRequest(String::from("{ \"reason\": \"Ce salon n'exists pas\" }"))
         }
     };
 
@@ -209,29 +215,30 @@ async fn post_message(form: Form<FormMessage>, event_streams: &State<EventStream
         }
     }
 
-    ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
+    ReponseJson::Created(format!("{{ \"api_key\": \"{}\" }}", user))
 }
 
+/// Invite un utilisateur dans un salon
 #[post("/invite", data = "<form>")]
 async fn post_invite(
     form: Form<FormAddUserRoom>,
     event_streams: &State<EventStreams>,
-) -> ApiResponse {
-    let bd_connection = connection();
+) -> ReponseJson {
+    let connection_bd = connection_bd();
     let form = form.into_inner();
-    let user = match bd_connection.validate_user_with_api_key(form.user_id, form.api_key.as_str()) {
+    let user = match connection_bd.verification_api_key_de_utilisateur(form.user_id, form.api_key.as_str()) {
         Ok(user) => user,
         Err(_) => {
-            return ApiResponse::Unauthorized(String::from(
+            return ReponseJson::Unauthorized(String::from(
                 "{ \"reason\": \"Mauvais id ou api key\" }",
             ));
         }
     };
 
-    let room = match bd_connection.add_user_room(form) {
+    let room = match connection_bd.ajout_user_room(form) {
         Ok(room) => room,
         Err(e) => {
-            return ApiResponse::BadRequest(format!(
+            return ReponseJson::BadRequest(format!(
                 "{{ \"api_key\": \"{}\", \"reason\": \"{}\" }}",
                 user, e
             ));
@@ -241,16 +248,16 @@ async fn post_invite(
     let lock = event_streams.read().await;
     if let Some(event_stream) = lock.get(&room.1) {
         event_stream.send(room.0.serialize()).unwrap();
-        for message in bd_connection.load_messages(room.1).unwrap() {
+        for message in connection_bd.recupere_messages(room.1).unwrap() {
             event_stream.send(message.serialize()).unwrap();
         }
     }
 
-    ApiResponse::Created(format!("{{ \"api_key\": \"{}\" }}", user))
+    ReponseJson::Created(format!("{{ \"api_key\": \"{}\" }}", user))
 }
 
 static mut IS_UNIT_TEST: bool = false;
-fn connection() -> Database {
+fn connection_bd() -> Database {
     Database::new(unsafe { IS_UNIT_TEST }).unwrap()
 }
 
@@ -259,7 +266,7 @@ pub fn build(is_unit_test: bool) -> Rocket<Build> {
     unsafe {
         IS_UNIT_TEST = is_unit_test;
     }
-    connection().create_tables().unwrap();
+    connection_bd().cree_tables().unwrap();
 
     rocket::build()
         .attach(crate::cors::CORS)

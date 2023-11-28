@@ -89,7 +89,7 @@ fn create_user<T>(
                 let response_data = json::parse(response_body.as_str()).unwrap();
                 match status {
                     201 => {
-                        account_manager.write().set_current_user(Some(User {
+                        account_manager.write().modifier_utilisateur_actuelle(Some(User {
                             id: response_data["user_id"].as_i64().unwrap(),
                             username: username.to_string(),
                             api_key: response_data["api_key"].as_str().unwrap().to_string(),

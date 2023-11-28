@@ -14,7 +14,7 @@ pub fn Home(cx: Scope) -> Element {
 
     let navigator = use_navigator(cx);
 
-    match account_manager.read().current_user() {
+    match account_manager.read().utilisateur_actuelle() {
         Some(_) => {
             if let Some(room) = rooms.read().0.keys().last() {
                 navigator.replace(Route::Conv { room_id: *room });

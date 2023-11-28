@@ -19,7 +19,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
     let account_manager = use_shared_state::<AccountManager>(cx).unwrap();
 
     let navigator = use_navigator(cx);
-    if account_manager.read().current_user().is_none() {
+    if account_manager.read().utilisateur_actuelle().is_none() {
         navigator.replace(Route::LogIn {});
         return render! {div{}};
     }
@@ -123,7 +123,7 @@ fn send_message<T>(
     }
     let form: HashMap<&str, String> = {
         let lock = account_manager.read();
-        let current_user = lock.current_user().unwrap();
+        let current_user = lock.utilisateur_actuelle().unwrap();
         serialize_message(
             *room_id,
             current_user.id,
@@ -143,7 +143,7 @@ fn send_message<T>(
                     201 => {
                         account_manager
                             .write_silent()
-                            .set_api_key(response_data["api_key"].as_str().unwrap().to_string());
+                            .modifier_api_key(response_data["api_key"].as_str().unwrap().to_string());
                         error_message.set(None);
                         message.set(String::new());
                     }
@@ -168,7 +168,7 @@ fn send_invite<T>(
     }
     let form: HashMap<&str, String> = {
         let lock = account_manager.read();
-        let current_user = lock.current_user().unwrap();
+        let current_user = lock.utilisateur_actuelle().unwrap();
         HashMap::<&'static str, String>::from([
             ("user_id", current_user.id.to_string()),
             ("api_key", current_user.api_key.to_string()),
@@ -187,7 +187,7 @@ fn send_invite<T>(
                 match response_data["api_key"].as_str() {
                     Some(api_key) => account_manager
                         .write_silent()
-                        .set_api_key(api_key.to_string()),
+                        .modifier_api_key(api_key.to_string()),
                     None => {}
                 }
                 match status {
@@ -247,7 +247,7 @@ fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
 
     render! {
         div{
-            class: match account_manager.read().current_user() {
+            class: match account_manager.read().utilisateur_actuelle() {
                 Some(user) => if user.id == message_user_id { MESSAGE_ME } else { MESSAGE_OTHER },
                 None => MESSAGE_OTHER
             },

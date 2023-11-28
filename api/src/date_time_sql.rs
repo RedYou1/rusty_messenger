@@ -8,6 +8,7 @@ use rocket::serde::ser::StdError;
 use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::Result;
 
+/// Représentation d'un champ DateTime de SQLite
 pub struct DateTimeSql(pub NaiveDateTime);
 
 #[derive(Debug, Clone, Copy)]

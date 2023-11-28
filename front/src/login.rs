@@ -17,7 +17,7 @@ pub fn LogIn(cx: Scope) -> Element {
 
     let userSetter =
         AsyncStateSetter::<Option<User>>::new(cx, account_manager, |account_manager, user| {
-            account_manager.write().set_current_user(user)
+            account_manager.write().modifier_utilisateur_actuelle(user)
         });
 
     let navigator = use_navigator(cx);

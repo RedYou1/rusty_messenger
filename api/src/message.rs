@@ -16,7 +16,8 @@ pub struct FormMessage {
 }
 
 impl Database {
-    pub fn add_message(&self, form: FormMessage) -> Result<Message> {
+    /// Ajoute un message dans un salon
+    pub fn ajout_message(&self, form: FormMessage) -> Result<Message> {
         let now = Utc::now();
         self.connection.execute(
             "INSERT INTO message (date, room_id, user_id, text) VALUES (?1, ?2, ?3, ?4)",
@@ -36,7 +37,8 @@ impl Database {
         })
     }
 
-    pub fn load_messages(&self, user_id: i64) -> Result<Vec<Message>> {
+    /// Récupère tous les messages
+    pub fn recupere_messages(&self, user_id: i64) -> Result<Vec<Message>> {
         let mut stmt =
         self.connection.prepare("SELECT message.date, message.room_id, message.user_id, message.text FROM user_room INNER JOIN message ON message.room_id = user_room.room_id WHERE user_room.user_id = ?1 ORDER BY message.date")?;
         let rows = stmt.query_map([user_id], map_message)?;
