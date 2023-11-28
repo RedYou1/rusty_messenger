@@ -70,11 +70,11 @@ fn create_user<T>(
     error: UseState<Option<String>>,
 ) {
     if username.is_empty() {
-        error.set(Some(String::from("Empty username")));
+        error.set(Some(String::from("Il faut au moins une lettre dans le nom")));
         return;
     }
     if password.is_empty() {
-        error.set(Some(String::from("Empty password")));
+        error.set(Some(String::from("Il faut au moins une lettre dans le mot de passe")));
         return;
     }
 
@@ -101,7 +101,7 @@ fn create_user<T>(
                     _ => error.set(Some(response_data["reason"].as_str().unwrap().to_string())),
                 }
             }
-            Err(_) => error.set(Some(String::from("Request Timeout"))),
+            Err(_) => error.set(Some(String::from("Perte de connection"))),
         }
     });
 }

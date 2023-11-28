@@ -35,7 +35,7 @@ async fn test_adduser() {
     assert_eq!(user.pass, "test_adduser");
     assert_eq!(
         add_user(&client, &form_user).await.unwrap_err(),
-        "Username Already Taken"
+        "Déjà pris"
     );
 }
 
@@ -49,7 +49,7 @@ async fn test_login() {
     };
     assert_eq!(
         login(&client, &form_user).await.unwrap_err(),
-        "bad username or password"
+        "Mauvais identifiant ou mot de passe"
     );
     let add_user = add_user(&client, &form_user).await.unwrap();
     let failed_user = FormAddUser {
@@ -58,7 +58,7 @@ async fn test_login() {
     };
     assert_eq!(
         login(&client, &failed_user).await.unwrap_err(),
-        "bad username or password"
+        "Mauvais identifiant ou mot de passe"
     );
     let user = login(&client, &form_user).await.unwrap();
     assert_eq!(add_user.id, user.id);
@@ -80,7 +80,7 @@ async fn test_room() {
         .addroom(&client, String::from("Room Room #1"))
         .await
         .unwrap_err(),
-        "bad user id or api key"
+        "Mauvais id ou api key"
     );
 }
 
@@ -98,7 +98,7 @@ async fn test_invite() {
         .invite(&client, "test_invite_1".to_string(), 1)
         .await
         .unwrap_err(),
-        "bad user id or api key"
+        "Mauvais id ou api key"
     );
 
     let mut user_1 = add_user(
@@ -139,7 +139,7 @@ async fn test_invite() {
             .invite(&client, user_1.username.to_string(), room.id)
             .await
             .unwrap_err(),
-        "You can't invite someone in a room you aren't in."
+        "Tu ne peux pas invité quelqu'un dans un salon que tu n'y est pas."
     );
 
     assert!(user_1
@@ -152,7 +152,7 @@ async fn test_invite() {
             .invite(&client, user_2.username, room.id)
             .await
             .unwrap_err(),
-        "That user is already in that room."
+        "Cet utilisateur est déjà dans ce salon."
     );
 }
 
@@ -182,7 +182,7 @@ async fn test_wrong_event() {
         )
         .await
         .unwrap_err(),
-        "bad user id or api key"
+        "Mauvais id ou api key"
     );
 }
 

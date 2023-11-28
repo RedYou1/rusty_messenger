@@ -87,7 +87,7 @@ fn create_room<T>(
     error: UseState<Option<String>>,
 ) {
     if name.is_empty() {
-        error.set(Some(String::from("Empty room name")));
+        error.set(Some(String::from("Il faut au moins une lettre dans le nom du salon")));
         return;
     }
     let form: HashMap<&str, String> = {
@@ -118,7 +118,7 @@ fn create_room<T>(
                     _ => error.set(Some(response_data["reason"].as_str().unwrap().to_string())),
                 }
             }
-            Err(_) => error.set(Some(String::from("Request Timeout"))),
+            Err(_) => error.set(Some(String::from("Perte de connection"))),
         }
     });
 }

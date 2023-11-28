@@ -116,7 +116,7 @@ impl Database {
 
         match rows.next() {
             Some(Ok(bd_user)) => Ok(bd_user),
-            _ => Err(format!("no user with the username {}", username)),
+            _ => Err(format!("Pas d'utilisateur avec ce nom {}", username)),
         }
     }
 

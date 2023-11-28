@@ -49,9 +49,9 @@ impl Database {
             "INSERT INTO user_room (user_id, room_id) SELECT ?1, ?2 FROM user_room WHERE user_id = ?3 AND room_id = ?2",
             (other_user.id, form.room_id, form.user_id),
         ) {
-            Ok(0) => Err(String::from("You can't invite someone in a room you aren't in.")),
+            Ok(0) => Err(String::from("Tu ne peux pas invité quelqu'un dans un salon que tu n'y est pas.")),
             Ok(_) => Ok((room, other_user.id)),
-            Err(_) => Err(String::from("That user is already in that room.")),
+            Err(_) => Err(String::from("Cet utilisateur est déjà dans ce salon.")),
         }
     }
 

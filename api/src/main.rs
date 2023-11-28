@@ -53,7 +53,7 @@ fn post_user(form: Form<FormAddUser>) -> ApiResponse {
             user.user_id, user.api_key
         )),
         Err(_) => {
-            ApiResponse::Unauthorized(String::from("{ \"reason\": \"Username Already Taken\" }"))
+            ApiResponse::Unauthorized(String::from("{ \"reason\": \"Déjà pris\" }"))
         }
     }
 }
@@ -66,7 +66,7 @@ fn get_user(user_id: i64) -> ApiResponse {
             "{{ \"user_id\": {}, \"username\": \"{}\" }}",
             user.id, user.username
         )),
-        Err(_) => ApiResponse::BadRequest(String::from("{ \"reason\": \"bad user id\" }")),
+        Err(_) => ApiResponse::BadRequest(String::from("{ \"reason\": \"Mauvais id\" }")),
     }
 }
 
@@ -81,7 +81,7 @@ fn post_login(form: Form<FormAddUser>) -> ApiResponse {
             auth.user_id, auth.api_key
         )),
         Err(_) => {
-            ApiResponse::Unauthorized(String::from("{ \"reason\": \"bad username or password\" }"))
+            ApiResponse::Unauthorized(String::from("{ \"reason\": \"Mauvais identifiant ou mot de passe\" }"))
         }
     }
 }
@@ -96,7 +96,7 @@ async fn post_room(form: Form<FormAddRoom>, convs: &State<EventStreams>) -> ApiR
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
-                "{ \"reason\": \"bad user id or api key\" }",
+                "{ \"reason\": \"Mauvais id ou api key\" }",
             ));
         }
     };
@@ -130,12 +130,12 @@ async fn get_events(
 
     let bd_user = match bd_connection.user_select_id(user_id) {
         Ok(bd_user) => bd_user,
-        Err(_) => return ApiResponseEvents::Unauthorized(String::from("bad user id or api key")),
+        Err(_) => return ApiResponseEvents::Unauthorized(String::from("Mauvais id ou api key")),
     };
     let bd_api_key = bd_user.api_key.as_str();
 
     if bd_api_key.eq("") || !bd_api_key.eq(api_key.as_str()) {
-        return ApiResponseEvents::Unauthorized(String::from("bad user id or api key"));
+        return ApiResponseEvents::Unauthorized(String::from("Mauvais id ou api key"));
     }
 
     let mut event_receiver = match {
@@ -189,7 +189,7 @@ async fn post_message(form: Form<FormMessage>, event_streams: &State<EventStream
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
-                "{ \"reason\": \"bad user id or api key\" }",
+                "{ \"reason\": \"Mauvais id ou api key\" }",
             ));
         }
     };
@@ -198,7 +198,7 @@ async fn post_message(form: Form<FormMessage>, event_streams: &State<EventStream
     let users = match bd_connection.select_users_room(room_id) {
         Ok(users) => users,
         Err(_) => {
-            return ApiResponse::BadRequest(String::from("{ \"reason\": \"room doesnt exists\" }"))
+            return ApiResponse::BadRequest(String::from("{ \"reason\": \"Ce salon n'exists pas\" }"))
         }
     };
 
@@ -223,7 +223,7 @@ async fn post_invite(
         Ok(user) => user,
         Err(_) => {
             return ApiResponse::Unauthorized(String::from(
-                "{ \"reason\": \"bad user id or api key\" }",
+                "{ \"reason\": \"Mauvais id ou api key\" }",
             ));
         }
     };

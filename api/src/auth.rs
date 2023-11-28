@@ -16,7 +16,7 @@ impl Database {
         let bd_api_key = bd_user.api_key.as_str();
 
         if bd_api_key.eq("") || !bd_api_key.eq(api_key) {
-            return Err(String::from("bad user id or api key"));
+            return Err(String::from("Mauvais id ou api key"));
         }
 
         let new_api_key = new_api_key_2(api_key);
@@ -35,7 +35,7 @@ impl Database {
         let bd_user = self.user_select_username(username)?;
 
         if !bcrypt::verify(password, bd_user.pass.as_str()) {
-            return Err(String::from("bad username or password"));
+            return Err(String::from("Mauvais identifiant ou mot de passe"));
         }
 
         let new_api_key = new_api_key();

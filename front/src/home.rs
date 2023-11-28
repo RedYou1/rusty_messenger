@@ -30,6 +30,6 @@ pub fn Home(cx: Scope) -> Element {
     };
 
     render! {
-        div{"Loading..."}
+        div{"Chargement"}
     }
 }

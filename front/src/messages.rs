@@ -118,7 +118,7 @@ fn send_message<T>(
     error_message: UseState<Option<String>>,
 ) {
     if message.is_empty() {
-        error_message.set(Some(String::from("Empty message")));
+        error_message.set(Some(String::from("Il faut au moins une lettre dans le message")));
         return;
     }
     let form: HashMap<&str, String> = {
@@ -150,7 +150,7 @@ fn send_message<T>(
                     _ => error_message.set(Some(response_data["reason"].as_str().unwrap().to_string())),
                 }
             }
-            Err(_) => error_message.set(Some(String::from("Request Timeout"))),
+            Err(_) => error_message.set(Some(String::from("Perte de connection"))),
         }
     });
 }
@@ -163,7 +163,7 @@ fn send_invite<T>(
     error_invite: UseState<Option<String>>,
 ) {
     if username.is_empty() {
-        error_invite.set(Some(String::from("Empty username")));
+        error_invite.set(Some(String::from("Il faut au moins une lettre dans le nom")));
         return;
     }
     let form: HashMap<&str, String> = {
@@ -199,7 +199,7 @@ fn send_invite<T>(
                         .set(Some(response_data["reason"].as_str().unwrap().to_string())),
                 }
             }
-            Err(_) => error_invite.set(Some(String::from("Request Timeout"))),
+            Err(_) => error_invite.set(Some(String::from("Perte de connection"))),
         }
     });
 }
@@ -220,7 +220,7 @@ fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
         .map(|username| username.as_ref().map(|username| username.to_string()));
     let username = match username {
         Some(Some(username)) => username,
-        Some(None) => String::from("Loading..."),
+        Some(None) => String::from("Chargement"),
         None => {
             users.write().0.insert(message_user_id, None);
             cx.spawn(async move {
@@ -238,7 +238,7 @@ fn message_element<'a, T>(cx: Scope<'a, T>, message: &Message) -> Element<'a> {
                     }
                 }
             });
-            String::from("Loading...")
+            String::from("Chargement")
         }
     };
 
