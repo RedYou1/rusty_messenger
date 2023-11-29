@@ -1,3 +1,8 @@
+//! Gestionnaire d'état asynchrone pour la communication entre processus
+//!
+//! Ce module implémente un gestionnaire d'état asynchrone (AsyncStateSetter) qui facilite la communication
+//! et le partage d'états entre des processus asynchrones en utilisant des coroutines et des canaux de communication.
+
 use std::sync::{Arc, Mutex};
 
 use dioxus::prelude::{use_coroutine, Coroutine, Scoped, UseSharedState};

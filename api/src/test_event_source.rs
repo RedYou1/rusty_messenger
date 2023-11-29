@@ -1,3 +1,9 @@
+//! Simulation de source d'événements pour les tests
+//!
+//! Ce module implémente une structure `TestEventSource` utilisée pour simuler une source
+//! d'événements lors des tests, effectuant des requêtes HTTP pour récupérer des événements
+//! et vérifiant s'ils correspondent aux événements attendus dans une application Rocket.
+
 use json::parse;
 use lib::EventMessage;
 use rocket::local::asynchronous::{Client, LocalResponse};
@@ -6,6 +12,7 @@ use rocket::tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::user::UserPass;
 
+/// Pseudo Event Source pour les tests
 #[derive(Debug)]
 pub struct TestEventSource<'a> {
     username: String,

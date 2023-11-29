@@ -1,3 +1,8 @@
+//! Tests pour l'application de chat
+//!
+//! Ce module contient des tests pour vérifier le bon fonctionnement des fonctionnalités de l'application,
+//! telles que l'ajout d'utilisateurs, la création de salons, l'envoi de messages, etc.
+
 use chrono::Utc;
 use dotenv::dotenv;
 use json::JsonValue;

@@ -1,3 +1,9 @@
+//! Gestionnaire de compte pour l'authentification et la communication asynchrone
+//!
+//! Ce module implémente un gestionnaire de compte (AccountManager) responsable de la gestion de l'authentification
+//! de l'utilisateur, de la gestion de l'état actuel de l'utilisateur et de la communication
+//! avec des composants asynchrones tels que les messages (Message) et les salons (Room).
+
 use lib::{Message, Room};
 
 use crate::{

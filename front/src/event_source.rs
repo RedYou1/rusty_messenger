@@ -1,3 +1,8 @@
+//! Gestionnaire d'événements pour la communication côté client
+//!
+//! Ce module implémente un gestionnaire d'événements (MyEventSource) qui se connecte à une source distante
+//! via EventSource et écoute les événements pour mettre à jour l'état de l'application côté client.
+
 use lib::{EventMessage, Message, Room};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Event, EventSource, MessageEvent};

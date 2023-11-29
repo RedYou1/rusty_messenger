@@ -1,3 +1,8 @@
+//! Gestion des messages dans une application de chat
+//!
+//! Ce module implémente des méthodes pour gérer l'ajout de messages dans les salons de discussion,
+//! ainsi que la récupération de tous les messages associés à un utilisateur dans une base de données.
+
 use chrono::Utc;
 use lib::Message;
 use rocket::serde::{Deserialize, Serialize};

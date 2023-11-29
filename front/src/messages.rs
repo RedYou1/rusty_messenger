@@ -1,3 +1,7 @@
+//! Module de conversation des utilisateur.
+//!
+//! Ce module implémente la page pour que les utilisateurs puissent ce communiquez dans des salons.
+
 use chrono::Local;
 use dioxus::prelude::*;
 use dioxus_router::prelude::use_navigator;

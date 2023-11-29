@@ -1,3 +1,9 @@
+//! Gestion des salons et des utilisateurs dans une application de chat
+//!
+//! Ce module implémente des méthodes pour gérer la création de salons, l'ajout d'utilisateurs
+//! à des salons existants, la récupération des salons associés à un utilisateur,
+//! ainsi que la récupération d'informations sur des salons spécifiques et leurs utilisateurs dans une base de données.
+
 use lib::Room;
 use rocket::serde::{Deserialize, Serialize};
 use rusqlite::{Result, Row};

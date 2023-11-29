@@ -1,3 +1,8 @@
+//! Application Web utilisant Dioxus
+//!
+//! Cette application implémente une interface Web avec différentes routes pour les pages,
+//! la gestion de l'état de l'application et les interactions utilisateur.
+
 #![allow(non_snake_case)]
 
 mod account_manager;

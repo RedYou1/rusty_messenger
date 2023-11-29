@@ -1,3 +1,7 @@
+//! Module de connection des utilisateur.
+//!
+//! Ce module implémente la page de connection des utilisateur.
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::{use_navigator, Link, Navigator};
 use lib::serialize_login;

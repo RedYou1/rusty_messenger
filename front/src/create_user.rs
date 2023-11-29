@@ -1,3 +1,7 @@
+//! Module de création d'utilisateur et gestion de l'inscription
+//!
+//! Ce module implémente la logique de création d'un nouvel utilisateur dans l'application
+
 use dioxus::prelude::Scope;
 use dioxus::prelude::*;
 use dioxus_router::prelude::{use_navigator, Link, Navigator};

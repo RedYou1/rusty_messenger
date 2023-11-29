@@ -1,3 +1,7 @@
+//! Module  qui implémente le struct User.
+//! 
+//! Il contient son id, nom et mot de passe.
+
 #![allow(non_snake_case)]
 
 #[derive(Debug, PartialEq)]

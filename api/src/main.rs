@@ -1,3 +1,7 @@
+//! Point d'entré du programme de l'api.
+//! 
+//! Il impléments les routes de l'api.
+
 #[macro_use]
 extern crate rocket;
 

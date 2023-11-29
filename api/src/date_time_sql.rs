@@ -1,3 +1,8 @@
+//! Représentation et conversion de DateTime pour SQLite
+//!
+//! Ce module définit des structures et implémente des traits pour gérer la représentation
+//! et la conversion des dates et heures (DateTime) dans une base de données SQLite en Rust.
+
 use std::{
     error::Error,
     fmt::{self, Display},

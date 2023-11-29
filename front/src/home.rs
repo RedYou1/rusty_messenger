@@ -1,3 +1,7 @@
+//! Module point d'entré de tout les utilisateur.
+//!
+//! Ce module implémente la page de redirection si l'utilisateur est déjà authentifier.
+
 use dioxus::prelude::Scope;
 use dioxus::prelude::*;
 use dioxus_router::prelude::use_navigator;

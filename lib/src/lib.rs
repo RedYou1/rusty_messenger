@@ -1,3 +1,8 @@
+//! Module de sérialisation et désérialisation de données et structures associées
+//!
+//! Ce module implémente des fonctions de sérialisation et désérialisation pour différentes données
+//! structurées et définit des structures pour représenter les salles (rooms) et les messages dans une application.
+
 use std::collections::HashMap;
 
 use chrono::{DateTime, TimeZone, Utc};

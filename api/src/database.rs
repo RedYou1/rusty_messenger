@@ -1,3 +1,8 @@
+//! Module gérant la connexion à la base de données SQLite
+//!
+//! Ce module fournit une structure `Database` pour gérer la connexion à une base de données SQLite,
+//! ainsi que des méthodes pour créer des tables dans cette base de données.
+
 use dotenv::dotenv;
 use rusqlite::{Connection, Result};
 use std::env;

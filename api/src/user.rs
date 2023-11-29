@@ -1,3 +1,8 @@
+//! Gestion des utilisateurs, authentification et génération de clés d'API
+//!
+//! Ce module implémente des méthodes pour la gestion des utilisateurs, la création et la gestion
+//! des clés d'API, ainsi que les opérations d'authentification dans une base de données.
+
 use chrono::Utc;
 use pwhash::bcrypt;
 use rand::Rng;

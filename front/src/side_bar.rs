@@ -1,3 +1,10 @@
+//! Module de la barre latérale et gestion des salons
+//!
+//! Ce module implémente la logique de la barre latérale de l'application,
+//! permettant de gérer les salons et d'afficher leur état. Il utilise des
+//! fonctionnalités de rendu et de gestion d'état fournies par `dioxus`,
+//! ainsi que des requêtes HTTP avec `reqwest` pour communiquer avec le serveur.
+
 use std::collections::HashMap;
 
 use dioxus::prelude::*;

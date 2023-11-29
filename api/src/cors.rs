@@ -1,4 +1,8 @@
-/// https://stackoverflow.com/questions/62412361/how-to-set-up-cors-or-options-for-rocket-rs
+//! Middleware pour gérer les en-têtes CORS dans Rocket.rs
+//!
+//! Ce middleware `CORS` ajoute les en-têtes CORS nécessaires aux réponses pour permettre
+//! le partage de ressources entre différentes origines.
+//! Source: https://stackoverflow.com/questions/62412361/how-to-set-up-cors-or-options-for-rocket-rs
 
 use rocket::fairing::{Fairing, Info, Kind};
 use rocket::http::Header;

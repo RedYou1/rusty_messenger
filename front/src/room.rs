@@ -1,3 +1,8 @@
+//! Gestion des identifiants de salle et extraction de la requête
+//!
+//! Ce module implémente des structures et des traits pour gérer les identifiants de salle (OpRoomId)
+//! et extraire des informations de la requête dans une application Rust utilisant `dioxus` et `dioxus_router`.
+
 use std::fmt::Display;
 
 use dioxus::prelude::Props;

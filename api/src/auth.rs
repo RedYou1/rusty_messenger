@@ -1,3 +1,8 @@
+//! Méthodes pour la gestion de l'authentification et de l'autorisation des utilisateurs
+//!
+//! Ce module implémente des méthodes pour vérifier les identifiants des utilisateurs,
+//! mettre à jour les clés d'API et gérer les opérations d'authentification dans la base de données.
+
 use pwhash::bcrypt;
 use rusqlite::Result;
 
