@@ -54,7 +54,7 @@ pub fn CreateUser(cx: Scope) -> Element {
             }
             Link{
                 to: Route::LogIn{},
-                "Login"
+                "Connection d'utilisateur"
             }
         }
     }

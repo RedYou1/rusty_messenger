@@ -54,7 +54,7 @@ fn post_user(form: Form<FormAddUser>) -> ReponseJson {
             user.user_id, user.api_key
         )),
         Err(_) => {
-            ReponseJson::Unauthorized(String::from("{ \"reason\": \"Déjà pris\" }"))
+            ReponseJson::Unauthorized(String::from("{ \"reason\": \"Identifiant déjà pris\" }"))
         }
     }
 }

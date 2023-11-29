@@ -60,7 +60,7 @@ pub fn LogIn(cx: Scope) -> Element {
             }
             Link{
                 to: Route::CreateUser{},
-                "create user"
+                "Création d'utilisateur"
             }
         }
     }

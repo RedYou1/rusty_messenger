@@ -35,7 +35,7 @@ async fn test_adduser() {
     assert_eq!(user.pass, "test_adduser");
     assert_eq!(
         add_user(&client, &form_user).await.unwrap_err(),
-        "Déjà pris"
+        "Identifiant déjà pris"
     );
 }
 
