@@ -23,7 +23,7 @@ pub fn CreateUser(cx: Scope) -> Element {
     render! {
         div{
             id:"createuser",
-            h1{"Create User"}
+            h1{"Création d'utilisateur"}
             match error.as_ref() {
                 Some(e) => render!{span{class:"Error",e.as_str()}},
                 None => render!{span{}}
@@ -36,7 +36,7 @@ pub fn CreateUser(cx: Scope) -> Element {
                     id: "username",
                     autofocus: true,
                     autocomplete: "off",
-                    placeholder: "username",
+                    placeholder: "nom d'utilisateur",
                     oninput: move |evt| username.set(evt.value.clone()),
                     value: "{username}"
                 }
@@ -45,7 +45,7 @@ pub fn CreateUser(cx: Scope) -> Element {
                     name: "password",
                     id: "password",
                     autocomplete: "off",
-                    placeholder: "password",
+                    placeholder: "mot de passe",
                     oninput: move |evt| password.set(evt.value.clone()),
                     value: "{password}"
                 }
@@ -53,7 +53,7 @@ pub fn CreateUser(cx: Scope) -> Element {
                     id: "send",
                     prevent_default: "onclick",
                     onclick: move |_| create_user(cx, navigator.to_owned(), account_manager.to_owned(), username.to_owned(), password, error.to_owned()),
-                    "Send"
+                    "Envoyer"
                 }
             }
             Link{

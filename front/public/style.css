@@ -234,7 +234,7 @@ form button {
 }
 
 #status.error::before {
-    content: "status: error";
+    content: "status: erreur";
 }
 
 #status.error {
@@ -243,7 +243,7 @@ form button {
 }
 
 #status.reconnecting::before {
-    content: "status: reconnecting";
+    content: "status: reconnection";
 }
 
 #status.reconnecting {
@@ -252,7 +252,7 @@ form button {
 }
 
 #status.connected::before {
-    content: "status: connected";
+    content: "status: connecter";
 }
 
 #status.connected {

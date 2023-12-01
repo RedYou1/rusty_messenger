@@ -22,6 +22,12 @@ pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
     let name = use_state(cx, || String::new());
     let error = use_state::<Option<String>>(cx, || None);
 
+    let navigator = use_navigator(cx);
+    if account_manager.read().utilisateur_actuelle().is_none() {
+        navigator.replace(Route::LogIn {});
+        return render! {div{}};
+    }
+
     let state = match *source_state.read() {
         SourceState::Error => "error",
         SourceState::ReConnecting => "reconnecting",
@@ -71,7 +77,7 @@ pub fn SideBar(cx: Scope, room_id: OpRoomId) -> Element {
                     name: "name",
                     id: "name",
                     autocomplete: "off",
-                    placeholder: "new room",
+                    placeholder: "nom du salon",
                     maxlength: "29",
                     oninput: move |evt| name.set(evt.value.clone()),
                     value: "{name}"

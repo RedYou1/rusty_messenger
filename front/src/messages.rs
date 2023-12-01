@@ -62,7 +62,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                     name: "username",
                     id: "username",
                     autocomplete: "off",
-                    placeholder: "Send an invite...",
+                    placeholder: "Envoyer une invitation...",
                     autofocus: true,
                     oninput: move |evt| username.set(evt.value.clone()),
                     value: "{username}"
@@ -71,7 +71,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                     id: "send",
                     prevent_default: "onclick",
                     onclick: move |_| send_invite(cx, account_manager.to_owned(), username.to_owned(), room_id, error_invite.to_owned()),
-                    "Send"
+                    "Envoyer"
                 }
             }
 
@@ -98,7 +98,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                     id: "message",
                     autofocus: true,
                     autocomplete: "off",
-                    placeholder: "Send a message...",
+                    placeholder: "Envoyer un message...",
                     autofocus: true,
                     oninput: move |evt| message.set(evt.value.clone()),
                     value: "{message}"
@@ -107,7 +107,7 @@ pub fn Conv(cx: Scope, room_id: i64) -> Element {
                     id: "send",
                     prevent_default: "onclick",
                     onclick: move |_| send_message(cx, account_manager.to_owned(), message.to_owned(), room_id, error_message.to_owned()),
-                    "Send"
+                    "Envoyer"
                 }
             }
         }

@@ -29,7 +29,7 @@ pub fn LogIn(cx: Scope) -> Element {
     render! {
         div{
             id:"login",
-            h1{"Login"}
+            h1{"Connection d'utilisateur"}
             match error.as_ref() {
                 Some(e) => render!{span{class:"Error",e.as_str()}},
                 None => render!{span{}}
@@ -42,7 +42,7 @@ pub fn LogIn(cx: Scope) -> Element {
                     id: "username",
                     autofocus: true,
                     autocomplete: "off",
-                    placeholder: "username",
+                    placeholder: "nom d'utilisateur",
                     oninput: move |evt| username.set(evt.value.clone()),
                     value: "{username}"
                 }
@@ -51,7 +51,7 @@ pub fn LogIn(cx: Scope) -> Element {
                     name: "password",
                     id: "password",
                     autocomplete: "off",
-                    placeholder: "password",
+                    placeholder: "mot de passe",
                     oninput: move |evt| password.set(evt.value.clone()),
                     value: "{password}"
                 }
@@ -59,7 +59,7 @@ pub fn LogIn(cx: Scope) -> Element {
                     id: "send",
                     prevent_default: "onclick",
                     onclick: move |_| login(cx, navigator.to_owned(), userSetter.to_owned(), username.to_owned(), password, error.to_owned()),
-                    "Send"
+                    "Envoyer"
                 }
             }
             Link{
